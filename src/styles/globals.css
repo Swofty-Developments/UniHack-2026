@@ -1,0 +1,223 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Sora", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --color-base-deepest: #060b18;
+  --color-base-panel: #0c1425;
+  --color-base-elevated: #131d35;
+  --color-base-surface: #1a2542;
+
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-border-hover: rgba(255, 255, 255, 0.12);
+  --color-border-accent: rgba(0, 221, 179, 0.3);
+
+  --color-text-primary: #f0f2f5;
+  --color-text-secondary: #8892a7;
+  --color-text-muted: #515c72;
+
+  --color-accent: #00ddb3;
+  --color-accent-muted: #00b894;
+  --color-accent-glow: rgba(0, 221, 179, 0.15);
+
+  --color-hazard-high: #ff6b6b;
+  --color-hazard-medium: #ffa94d;
+  --color-hazard-low: #ffd43b;
+  --color-success: #51cf66;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--color-base-deepest);
+  color: var(--color-text-primary);
+}
+
+/* Topographic grid background */
+.topo-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* Mesh gradient hero background */
+.mesh-gradient {
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(0,221,179,0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(0,184,148,0.06) 0%, transparent 40%),
+    radial-gradient(ellipse at 50% 80%, rgba(0,221,179,0.04) 0%, transparent 50%);
+}
+
+/* Frosted glass panel */
+.glass-panel {
+  background: rgba(12, 20, 37, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Glow effect */
+.glow-teal {
+  box-shadow: 0 0 30px rgba(0, 221, 179, 0.15), 0 0 60px rgba(0, 221, 179, 0.05);
+}
+
+.glow-teal-sm {
+  box-shadow: 0 0 15px rgba(0, 221, 179, 0.12);
+}
+
+/* Staggered animations */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-right {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(0,221,179,0.1); }
+  50% { box-shadow: 0 0 40px rgba(0,221,179,0.25); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.6s ease-out both;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out both;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.5s ease-out both;
+}
+
+.animate-slide-right {
+  animation: slide-right 0.5s ease-out both;
+}
+
+/* Stagger delays */
+.delay-1 { animation-delay: 0.1s; }
+.delay-2 { animation-delay: 0.2s; }
+.delay-3 { animation-delay: 0.3s; }
+.delay-4 { animation-delay: 0.4s; }
+.delay-5 { animation-delay: 0.5s; }
+.delay-6 { animation-delay: 0.6s; }
+.delay-7 { animation-delay: 0.7s; }
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.08);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+/* Three.js canvas */
+canvas {
+  touch-action: none;
+}
+
+/* Contour line decoration */
+.contour-line {
+  background: linear-gradient(90deg, transparent, rgba(0,221,179,0.15), transparent);
+  height: 1px;
+}
+
+/* Number/stat styling */
+.stat-number {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Interactive card hover */
+.card-interactive {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card-interactive:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255,255,255,0.12);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+/* Focus styles */
+input:focus, button:focus-visible {
+  outline: 2px solid rgba(0,221,179,0.5);
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background: rgba(0,221,179,0.3);
+  color: white;
+}
+
+/* Hero demo keyframes */
+@keyframes spin-slow {
+  from { transform: rotateX(-20deg) rotateY(0deg); }
+  to { transform: rotateX(-20deg) rotateY(360deg); }
+}
+
+@keyframes scan-sweep {
+  0%, 100% { transform: translateY(-100%); }
+  50% { transform: translateY(100%); }
+}
+
+@keyframes progress {
+  0% { width: 0%; }
+  50% { width: 85%; }
+  100% { width: 100%; }
+}
+
+@keyframes dash {
+  from { stroke-dashoffset: 200; }
+  to { stroke-dashoffset: 0; }
+}
