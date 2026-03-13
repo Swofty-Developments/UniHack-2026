@@ -3,7 +3,7 @@ import { HeroDemo } from "./HeroDemo";
 
 export function HeroSection() {
   return (
-    <section className="relative flex min-h-screen items-center overflow-hidden">
+    <section className="relative flex min-h-[calc(100dvh-6rem)] items-center overflow-hidden pt-24">
       {/* Background layers */}
       <div className="absolute inset-0 topo-grid" />
       <div className="absolute inset-0 mesh-gradient" />

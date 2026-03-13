@@ -15,6 +15,7 @@ import {
 import { PROFILES } from "~/lib/types";
 import type { AccessibilityProfile } from "~/lib/types";
 import type { LucideIcon } from "lucide-react";
+import { TEAM } from "~/lib/team";
 
 const iconMap: Record<AccessibilityProfile, LucideIcon> = {
   wheelchair: Accessibility,
@@ -151,21 +152,56 @@ export default function AboutPage() {
           <p className="animate-fade-up font-[family-name:var(--font-mono)] mb-2 text-xs uppercase tracking-[0.2em] text-[#00ddb3]">
             Team
           </p>
-          <h2 className="animate-fade-up delay-1 font-[family-name:var(--font-heading)] mb-8 text-2xl font-bold text-[#f0f2f5]">
+          <h2 className="animate-fade-up delay-1 font-[family-name:var(--font-heading)] mb-3 text-2xl font-bold text-[#f0f2f5]">
             The Team
           </h2>
-          <div className="animate-fade-up delay-2 glass-panel rounded-2xl border border-[rgba(255,255,255,0.06)] p-8 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[rgba(0,221,179,0.08)] text-[#00ddb3]">
-              <Users className="h-7 w-7" />
-            </div>
-            <p className="font-[family-name:var(--font-heading)] text-lg font-semibold text-[#f0f2f5]">
-              Built for UNIHACK 2026
-            </p>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[#8892a7]">
-              AccessScan was created by a passionate team of students who
-              believe technology can break down barriers and make every space
-              welcoming for everyone.
-            </p>
+          <p className="animate-fade-up delay-2 mb-8 max-w-xl text-sm leading-relaxed text-[#8892a7]">
+            AccessScan was created by a passionate team of students who believe
+            technology can break down barriers and make every space welcoming
+            for everyone.
+          </p>
+
+          <div className="flex flex-wrap justify-center gap-5">
+            {TEAM.map((member, index) => (
+              <div
+                key={member.discordId}
+                className={`animate-fade-up delay-${Math.min(
+                  index + 3,
+                  7,
+                )} glass-panel flex w-full flex-col items-center rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[#0c1425] p-6 text-center shadow-lg shadow-black/20 transition-all hover:border-[rgba(255,255,255,0.12)] hover:shadow-black/40 sm:w-1/2 lg:w-1/3`}
+              >
+                <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-[rgba(0,221,179,0.08)]">
+                  <img
+                    src={`https://api.shiroko.me/discord/avatar/${member.discordId}`}
+                    alt={member.name}
+                    className="h-[4.5rem] w-[4.5rem] rounded-full object-cover"
+                  />
+                </div>
+
+                <p className="font-[family-name:var(--font-heading)] text-sm font-semibold text-[#f0f2f5]">
+                  {member.name}
+                </p>
+                <p className="mt-1 text-[0.7rem] text-[#8892a7]">
+                  AccessScan team
+                </p>
+
+                <div className="mt-4 w-full rounded-xl bg-[rgba(4,9,20,0.9)] p-3 text-left">
+                  <div className="text-[0.75rem] font-medium uppercase tracking-[0.16em] text-[#8892a7]">
+                    Roles
+                  </div>
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    {member.roles.map((role) => (
+                      <span
+                        key={role}
+                        className="inline-block rounded-full bg-[rgba(0,221,179,0.12)] px-3 py-1 text-[0.75rem] font-medium uppercase tracking-[0.14em] text-[#00ddb3]"
+                      >
+                        {role}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
       </div>

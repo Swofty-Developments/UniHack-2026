@@ -144,9 +144,9 @@ export function ScanViewerPage({ scanId, initialScan, initialHazards }: ScanView
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] pt-16">
+    <div className="flex min-h-[calc(100dvh-4rem)] flex-col pt-16 md:h-[calc(100vh-4rem)] md:flex-row">
       {/* Sidebar */}
-      <aside className="flex w-80 shrink-0 flex-col overflow-y-auto border-r border-[rgba(255,255,255,0.06)] bg-[#060b18]">
+      <aside className="flex w-full flex-none flex-col overflow-hidden border-b border-[rgba(255,255,255,0.06)] bg-[#060b18] md:w-80 md:shrink-0 md:border-b-0 md:border-r">
         <div className="border-b border-[rgba(255,255,255,0.06)] p-4">
           <h2 className="truncate text-lg font-semibold font-[family-name:var(--font-heading)] text-[#f0f2f5]">
             {scan.originalName}
@@ -173,7 +173,7 @@ export function ScanViewerPage({ scanId, initialScan, initialHazards }: ScanView
           />
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-medium font-[family-name:var(--font-heading)] text-[#8892a7]">
               Hazards
@@ -191,7 +191,7 @@ export function ScanViewerPage({ scanId, initialScan, initialHazards }: ScanView
       </aside>
 
       {/* 3D Viewer */}
-      <div className="relative flex-1 p-2">
+      <div className="relative min-h-[45dvh] flex-1 p-2 md:min-h-0">
         <ModelViewer
           modelUrl={scan.fileUrl}
           hazards={filteredHazards}
