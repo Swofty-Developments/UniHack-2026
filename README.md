@@ -1,34 +1,103 @@
-# Create T3 App
+﻿# AccessAtlas
 
-This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+AccessAtlas is a React Native + Express prototype for mapping accessible indoor spaces, viewing hazard-tagged 3D scans, and demoing AI-assisted accessibility analysis for UNIHACK 2026.
 
-## What's next? How do I make an app with this?
+## Project Structure
 
-We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
+- `frontend/`: Expo React Native app
+- `backend/`: Express + TypeScript API with MongoDB
+- `docker-compose.yml`: Docker setup for backend and MongoDB
 
-If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
+## Quick Start
 
-- [Next.js](https://nextjs.org)
-- [NextAuth.js](https://next-auth.js.org)
-- [Prisma](https://prisma.io)
-- [Drizzle](https://orm.drizzle.team)
-- [Tailwind CSS](https://tailwindcss.com)
-- [tRPC](https://trpc.io)
+### 1. Backend
 
-## Learn More
+The fastest local setup is to run MongoDB locally and run the backend on your host machine.
 
-To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
+1. Create `backend/.env` from `backend/.env.example`.
+2. Set `MONGO_URI=mongodb://localhost:27017/accessatlas`.
+3. Set your real `GEMINI_API_KEY`.
+4. Install dependencies and seed the database:
 
-- [Documentation](https://create.t3.gg/)
-- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
+```powershell
+cd backend
+npm install
+npm run seed
+```
 
-You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
+5. Start the backend:
 
-## How do I deploy this?
+```powershell
+cd backend
+npm run dev
+```
 
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
+The API should be available at http://localhost:3001/health.
 
+### 2. Frontend
 
-## Run DB through terminal
-1. npm run db:up
-2. npm run db:push
+Expo will read `frontend/.env` automatically. This repo now supports a device-specific API URL through `EXPO_PUBLIC_API_URL`.
+
+```powershell
+cd frontend
+npm install
+npm start
+```
+
+The checked-in example is `frontend/.env.example`. Your local ignored `frontend/.env` is currently set to:
+
+```env
+EXPO_PUBLIC_API_URL=http://192.168.1.103:3001/api
+```
+
+After changing `frontend/.env`, restart Expo so the new API URL is picked up.
+
+## Running On Devices
+
+### Android Emulator
+
+Use this API URL in `frontend/.env`:
+
+```env
+EXPO_PUBLIC_API_URL=http://10.0.2.2:3001/api
+```
+
+Then start Expo and launch Android:
+
+```powershell
+cd frontend
+npm start
+```
+
+Press `a` in the Expo terminal, or run:
+
+```powershell
+cd frontend
+npm run android
+```
+
+### Physical iPhone
+
+Windows cannot run the iOS Simulator, so the supported iPhone flow here is a physical device with Expo Go.
+
+1. Make sure the iPhone and this PC are on the same Wi-Fi network.
+2. Keep `frontend/.env` pointed at your LAN IP:
+
+```env
+EXPO_PUBLIC_API_URL=http://192.168.1.103:3001/api
+```
+
+3. Install Expo Go on the iPhone.
+4. Start the backend and frontend.
+5. Scan the QR code from the Expo terminal.
+
+## Docker Notes
+
+`docker-compose.yml` includes both `mongodb` and `backend`. If port `27017` is already in use because MongoDB is running locally, either stop the local MongoDB service before using Docker Compose, or keep MongoDB local and run the backend on the host as described above.
+
+## Troubleshooting
+
+- If the iPhone can load Expo Go but the app cannot reach the API, confirm port `3001` is allowed through Windows Firewall.
+- If you switch between emulator, web, and phone testing, update `frontend/.env` and restart Expo each time.
+- If Docker Compose warns that port `27017` is in use, use the host-based backend flow instead of the Docker MongoDB container.
+- iOS Simulator requires macOS, so on this Windows setup use either Android Emulator or a physical iPhone.

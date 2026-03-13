@@ -1,0 +1,172 @@
+[
+  {
+    "name": "Learning and Teaching Building - South Entry",
+    "description": "Primary south-side approach to the Learning and Teaching Building at Monash Clayton.",
+    "buildingType": "university",
+    "areaSqMeters": 640,
+    "polygon": {
+      "coordinates": [
+        { "latitude": -37.9131, "longitude": 145.1330 },
+        { "latitude": -37.9131, "longitude": 145.1343 },
+        { "latitude": -37.9122, "longitude": 145.1343 },
+        { "latitude": -37.9122, "longitude": 145.1330 }
+      ]
+    },
+    "center": { "latitude": -37.91265, "longitude": 145.13365 },
+    "fillColor": "rgba(37, 99, 235, 0.3)",
+    "hazards": [
+      {
+        "type": "stairs",
+        "severity": "high",
+        "description": "Main threshold relies on a short stair run with no nearby ramp line.",
+        "affectsProfiles": ["wheelchair", "limited_mobility", "elderly", "parents_with_prams"],
+        "position3D": { "x": -2, "y": 0, "z": 1 },
+        "confidence": 0.93
+      },
+      {
+        "type": "confusing_wayfinding",
+        "severity": "medium",
+        "description": "Signage splits between multiple wings and lifts without a clear accessible route marker.",
+        "affectsProfiles": ["neurodivergent", "low_vision", "elderly"],
+        "position3D": { "x": 1, "y": 2, "z": -1 },
+        "confidence": 0.78
+      }
+    ]
+  },
+  {
+    "name": "Campus Centre - Main Arcade",
+    "description": "Busy circulation spine linking food, retail, and services in the heart of campus.",
+    "buildingType": "shopping",
+    "areaSqMeters": 780,
+    "polygon": {
+      "coordinates": [
+        { "latitude": -37.9121, "longitude": 145.1342 },
+        { "latitude": -37.9121, "longitude": 145.1361 },
+        { "latitude": -37.9112, "longitude": 145.1361 },
+        { "latitude": -37.9112, "longitude": 145.1342 }
+      ]
+    },
+    "center": { "latitude": -37.91165, "longitude": 145.13515 },
+    "fillColor": "rgba(16, 185, 129, 0.3)",
+    "hazards": [
+      {
+        "type": "slippery_surface",
+        "severity": "medium",
+        "description": "Polished arcade tiles become slick during lunch traffic and rainy weather.",
+        "affectsProfiles": ["elderly", "limited_mobility", "parents_with_prams"],
+        "position3D": { "x": 0, "y": 0, "z": 0 },
+        "confidence": 0.81
+      },
+      {
+        "type": "crowding",
+        "severity": "low",
+        "description": "Peak-hour queuing narrows the clear path through the central arcade.",
+        "affectsProfiles": ["wheelchair", "low_vision", "neurodivergent"],
+        "position3D": { "x": 2, "y": 1, "z": -2 },
+        "confidence": 0.69
+      }
+    ]
+  },
+  {
+    "name": "Matheson Library - Ground Floor",
+    "description": "Main library entry sequence, service desk, and first-floor vertical circulation zone.",
+    "buildingType": "university",
+    "areaSqMeters": 520,
+    "polygon": {
+      "coordinates": [
+        { "latitude": -37.9110, "longitude": 145.1321 },
+        { "latitude": -37.9110, "longitude": 145.1333 },
+        { "latitude": -37.9102, "longitude": 145.1333 },
+        { "latitude": -37.9102, "longitude": 145.1321 }
+      ]
+    },
+    "center": { "latitude": -37.9106, "longitude": 145.1327 },
+    "fillColor": "rgba(139, 92, 246, 0.3)",
+    "hazards": [
+      {
+        "type": "heavy_door",
+        "severity": "medium",
+        "description": "Manual entrance doors require high opening force outside staffed hours.",
+        "affectsProfiles": ["wheelchair", "limited_mobility", "elderly"],
+        "position3D": { "x": -1, "y": 1, "z": 2 },
+        "confidence": 0.87
+      },
+      {
+        "type": "poor_lighting",
+        "severity": "low",
+        "description": "Transition corridor toward the lift lobby has uneven lighting and glare.",
+        "affectsProfiles": ["low_vision", "elderly"],
+        "position3D": { "x": 2, "y": 2, "z": -1 },
+        "confidence": 0.72
+      }
+    ]
+  },
+  {
+    "name": "Chancellery Loop - Student Services",
+    "description": "Administrative frontage and student service counters facing the main arrival loop.",
+    "buildingType": "office",
+    "areaSqMeters": 410,
+    "polygon": {
+      "coordinates": [
+        { "latitude": -37.9104, "longitude": 145.1351 },
+        { "latitude": -37.9104, "longitude": 145.1364 },
+        { "latitude": -37.9095, "longitude": 145.1364 },
+        { "latitude": -37.9095, "longitude": 145.1351 }
+      ]
+    },
+    "center": { "latitude": -37.90995, "longitude": 145.13575 },
+    "fillColor": "rgba(245, 158, 11, 0.3)",
+    "hazards": [
+      {
+        "type": "no_seating",
+        "severity": "medium",
+        "description": "Waiting line from the loop to the service desk lacks nearby rest seating.",
+        "affectsProfiles": ["limited_mobility", "elderly"],
+        "position3D": { "x": 1, "y": 0, "z": 1 },
+        "confidence": 0.8
+      },
+      {
+        "type": "audio_only_alert",
+        "severity": "high",
+        "description": "Queue callouts rely on audio announcements with weak visual duplication.",
+        "affectsProfiles": ["hearing_impaired"],
+        "position3D": { "x": -2, "y": 2, "z": 0 },
+        "confidence": 0.84
+      }
+    ]
+  },
+  {
+    "name": "Engineering Precinct Walkway",
+    "description": "Outdoor connector between engineering buildings and the main east-west pedestrian spine.",
+    "buildingType": "public",
+    "areaSqMeters": 690,
+    "polygon": {
+      "coordinates": [
+        { "latitude": -37.9146, "longitude": 145.1364 },
+        { "latitude": -37.9146, "longitude": 145.1384 },
+        { "latitude": -37.9136, "longitude": 145.1384 },
+        { "latitude": -37.9136, "longitude": 145.1364 }
+      ]
+    },
+    "center": { "latitude": -37.9141, "longitude": 145.1374 },
+    "fillColor": "rgba(236, 72, 153, 0.3)",
+    "hazards": [
+      {
+        "type": "steep_gradient",
+        "severity": "high",
+        "description": "A sloped connection toward the workshop edge exceeds comfortable gradient for many users.",
+        "affectsProfiles": ["wheelchair", "limited_mobility", "elderly", "parents_with_prams"],
+        "position3D": { "x": 0, "y": 0, "z": 3 },
+        "confidence": 0.9
+      },
+      {
+        "type": "trip_hazard",
+        "severity": "medium",
+        "description": "Concrete slab joins create repeated height changes along the walkway edge.",
+        "affectsProfiles": ["low_vision", "elderly", "wheelchair"],
+        "position3D": { "x": 2, "y": 0, "z": -2 },
+        "confidence": 0.77
+      }
+    ]
+  }
+]
