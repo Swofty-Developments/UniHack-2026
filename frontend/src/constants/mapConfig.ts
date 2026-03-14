@@ -1,14 +1,10 @@
-export const INITIAL_REGION = {
-  latitude: -37.9107,
-  longitude: 145.134,
-  latitudeDelta: 0.012,
-  longitudeDelta: 0.012,
-};
+export const MAPBOX_ACCESS_TOKEN =
+  process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? '';
 
-export const MAP_STYLE = {
-  polygon: {
-    strokeWidth: 2,
-    strokeColor: 'rgba(37, 99, 235, 0.8)',
-    fillColor: 'rgba(37, 99, 235, 0.3)',
-  },
-};
+export const MAPBOX_STYLE_URL = 'mapbox://styles/mapbox/dark-v11';
+
+export const INITIAL_CENTER: [number, number] = [145.134, -37.9107];
+
+export const INITIAL_ZOOM = 15.5;
+
+export const INITIAL_PITCH = 0;

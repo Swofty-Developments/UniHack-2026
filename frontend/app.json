@@ -19,6 +19,7 @@
       }
     },
     "android": {
+      "package": "com.accessatlas.app",
       "adaptiveIcon": {
         "backgroundColor": "#0F172A",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -30,6 +31,9 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "plugins": [
+      "@rnmapbox/maps"
+    ],
     "extra": {
       "apiUrl": "http://localhost:3001/api"
     }

@@ -34,7 +34,7 @@ function clamp(value: number, min: number, max: number) {
 function sortHazardsForRoute(hazards: Hazard[]) {
   return hazards
     .slice()
-    .sort((left, right) => right.position3D.z - left.position3D.z || left.position3D.x - right.position3D.x);
+    .sort((left, right) => (right.position3D?.z ?? 0) - (left.position3D?.z ?? 0) || (left.position3D?.x ?? 0) - (right.position3D?.x ?? 0));
 }
 
 function detourOffset(hazard: Hazard) {
@@ -65,11 +65,13 @@ export function buildAccessibleRoute(
   const primaryProfile = getPrimaryProfile(normalizedProfiles);
 
   relevantHazards.slice(0, 5).forEach((hazard, index) => {
-    const direction = hazard.position3D.x >= 0 ? -1 : 1;
+    const px = hazard.position3D?.x ?? 0;
+    const pz = hazard.position3D?.z ?? 0;
+    const direction = px >= 0 ? -1 : 1;
     const offset = detourOffset(hazard) + normalizedProfiles.length * 0.15;
-    const laneX = clamp(hazard.position3D.x + direction * offset, -4.2, 4.2);
-    const entryZ = hazard.position3D.z + 1.15 + index * 0.18;
-    const exitZ = hazard.position3D.z - 1.1 - index * 0.12;
+    const laneX = clamp(px + direction * offset, -4.2, 4.2);
+    const entryZ = pz + 1.15 + index * 0.18;
+    const exitZ = pz - 1.1 - index * 0.12;
 
     points.push({ x: laneX, y: 0.1, z: entryZ });
     points.push({ x: laneX, y: 0.1, z: exitZ });

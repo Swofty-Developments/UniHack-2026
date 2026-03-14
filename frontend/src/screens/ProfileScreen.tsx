@@ -1,370 +1,281 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
-  ActivityIndicator,
-  ScrollView,
+  Animated,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useProfileStore } from '../stores/useProfileStore';
 import { useAuthStore } from '../stores/useAuthStore';
 import { ACCESSIBILITY_PROFILES } from '../constants/profiles';
 import { Colors } from '../constants/colors';
-import { createUser, updateUserProfile } from '../services/users';
-import { AccessibilityProfileId } from '../types/hazard';
-import {
-  getSelectedProfilesSummary,
-  toggleSelectedProfile,
-} from '../utils/profileSelection';
+import { RootStackParamList } from '../types/navigation';
+import { getSelectedProfilesSummary } from '../utils/profileSelection';
 import { FLOATING_TAB_BAR_HEIGHT } from '../components/navigation/FloatingTabBar';
+import { useFadeIn, useStaggeredEntrance } from '../hooks/useAnimations';
 
-const PROFILE_ICONS: Record<AccessibilityProfileId, keyof typeof Ionicons.glyphMap> = {
-  wheelchair: 'accessibility-outline',
-  low_vision: 'eye-outline',
-  limited_mobility: 'walk-outline',
-  hearing_impaired: 'volume-mute-outline',
-  neurodivergent: 'shapes-outline',
-  elderly: 'heart-outline',
-  parents_with_prams: 'people-outline',
-};
+type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { selectedProfiles, setProfiles } = useProfileStore();
-  const { displayName, isOnboarded, setUser, userId } = useAuthStore();
-  const [nameInput, setNameInput] = useState(displayName || '');
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const navigation = useNavigation<NavProp>();
+  const { selectedProfiles } = useProfileStore();
+  const { displayName, isOnboarded } = useAuthStore();
+
+  const heroFade = useFadeIn(0);
+  const cardAnims = useStaggeredEntrance(4, 80);
 
   const activeProfiles = useMemo(
-    () => ACCESSIBILITY_PROFILES.filter((profile) => selectedProfiles.includes(profile.id)),
-    [selectedProfiles]
+    () => ACCESSIBILITY_PROFILES.filter((p) => selectedProfiles.includes(p.id)),
+    [selectedProfiles],
   );
 
   const activeSummary = useMemo(
     () => getSelectedProfilesSummary(selectedProfiles),
-    [selectedProfiles]
+    [selectedProfiles],
   );
 
-  const handleOnboard = async () => {
-    if (!nameInput.trim()) {
-      setSaveMessage('Enter a display name to claim territories.');
-      return;
-    }
-
-    setIsSaving(true);
-    setSaveMessage(null);
-
-    try {
-      const user = await createUser(nameInput.trim(), selectedProfiles);
-      setUser(user.id, user.displayName);
-      setSaveMessage('Scanner profile created.');
-    } catch {
-      setUser('local-user', nameInput.trim());
-      setSaveMessage('Saved locally. The backend profile sync can happen later.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleProfileToggle = async (profileId: AccessibilityProfileId) => {
-    const nextProfiles = toggleSelectedProfile(selectedProfiles, profileId);
-    setProfiles(nextProfiles);
-    setSaveMessage(null);
-
-    if (!userId) {
-      return;
-    }
-
-    try {
-      await updateUserProfile(userId, nextProfiles);
-      setSaveMessage('Accessibility modes updated.');
-    } catch {
-      setSaveMessage('Modes changed locally, but remote sync failed.');
-    }
-  };
-
   return (
-    <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          {
-            paddingTop: insets.top + 14,
-            paddingBottom: FLOATING_TAB_BAR_HEIGHT + insets.bottom + 28,
-          },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.heroCard}>
-          <Text style={styles.heroEyebrow}>Accessibility profile</Text>
-          <Text style={styles.heroTitle}>Stack the modes that actually match real life</Text>
-          <Text style={styles.heroBody}>
-            AccessAtlas now supports multiple active accessibility modes at the same time, so hazard filtering and route planning can reflect overlapping needs instead of forcing a single label.
-          </Text>
-        </View>
+    <View
+      style={[
+        styles.container,
+        {
+          paddingTop: insets.top + 14,
+          paddingBottom: FLOATING_TAB_BAR_HEIGHT + insets.bottom + 12,
+        },
+      ]}
+    >
+      {/* Header */}
+      <Animated.View style={heroFade}>
+        <Text style={styles.eyebrow}>Profile</Text>
+        <Text style={styles.title}>Your AccessAtlas</Text>
+      </Animated.View>
 
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Active modes</Text>
-            <Text style={styles.summaryValue}>{selectedProfiles.length}</Text>
-            <Text style={styles.summaryMeta}>{activeSummary}</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Scanner identity</Text>
-            <Text style={styles.summaryValue}>{displayName ?? 'Guest explorer'}</Text>
-            <Text style={styles.summaryMeta}>Used for map claims and leaderboard credit</Text>
-          </View>
-        </View>
-
-        <View style={styles.activeModesCard}>
-          <Text style={styles.cardTitle}>Currently shaping routes</Text>
-          <View style={styles.modeChipRow}>
-            {activeProfiles.map((profile) => (
-              <View key={profile.id} style={styles.modeChip}>
-                <Text style={styles.modeChipText}>{profile.label}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
+      {/* Identity card */}
+      <Animated.View style={cardAnims[0]}>
         {isOnboarded && displayName ? (
-          <View style={styles.userCard}>
-            <View style={styles.userAvatar}>
-              <Text style={styles.userAvatarText}>{displayName[0]}</Text>
+          <View style={styles.identityCard}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{displayName[0]}</Text>
             </View>
-            <View style={styles.userCardCopy}>
-              <Text style={styles.userName}>{displayName}</Text>
-              <Text style={styles.userCaption}>
-                Your scans will be credited publicly, and your active accessibility modes stay synced into routing.
-              </Text>
+            <View style={styles.identityInfo}>
+              <Text style={styles.identityName}>{displayName}</Text>
+              <Text style={styles.identityCaption}>Scans credited publicly</Text>
             </View>
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() => navigation.navigate('Settings')}
+              accessibilityRole="button"
+              accessibilityLabel="Edit profile settings"
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            >
+              <Ionicons name="pencil-outline" size={16} color={Colors.textSecondary} />
+            </TouchableOpacity>
           </View>
         ) : (
-          <View style={styles.onboardingCard}>
-            <Text style={styles.cardTitle}>Create your scanner identity</Text>
-            <Text style={styles.cardBody}>
-              Optional for browsing, but required if you want your scans credited publicly.
-            </Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Your display name"
-              placeholderTextColor={Colors.textMuted}
-              value={nameInput}
-              onChangeText={setNameInput}
-            />
-            <TouchableOpacity
-              style={[styles.primaryButton, isSaving && styles.primaryButtonDisabled]}
-              onPress={() => void handleOnboard()}
-              disabled={isSaving}
-            >
-              {isSaving ? (
-                <ActivityIndicator color={Colors.white} />
-              ) : (
-                <Text style={styles.primaryButtonText}>Create scanner profile</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.onboardCta}
+            onPress={() => navigation.navigate('Onboarding')}
+            activeOpacity={0.88}
+            accessibilityRole="button"
+            accessibilityLabel="Create scanner identity for credited scans and leaderboard"
+          >
+            <View style={styles.onboardIconWrap}>
+              <Ionicons name="person-add-outline" size={22} color={Colors.primary} />
+            </View>
+            <View style={styles.onboardTextBlock}>
+              <Text style={styles.onboardTitle}>Create scanner identity</Text>
+              <Text style={styles.onboardBody}>Required for credited scans & leaderboard</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
         )}
+      </Animated.View>
 
-        <Text style={styles.sectionTitle}>Accessibility modes</Text>
-        <Text style={styles.sectionDescription}>
-          Toggle every mode that should influence hazard filtering and safe-route generation. We always keep at least one active.
-        </Text>
-
-        {ACCESSIBILITY_PROFILES.map((profile) => {
-          const isSelected = selectedProfiles.includes(profile.id);
-          const profileColor = Colors.profileColors[profile.id] || Colors.primary;
-
-          return (
-            <TouchableOpacity
-              key={profile.id}
-              style={[
-                styles.profileCard,
-                isSelected && {
-                  borderColor: profileColor,
-                  backgroundColor: `${profileColor}18`,
-                },
-              ]}
-              onPress={() => void handleProfileToggle(profile.id)}
-              activeOpacity={0.92}
-            >
-              <View style={styles.profileHeader}>
-                <View style={[styles.profileIcon, { backgroundColor: `${profileColor}22` }]}>
-                  <Ionicons name={PROFILE_ICONS[profile.id]} size={22} color={profileColor} />
-                </View>
-                <View style={styles.profileCopy}>
-                  <Text style={styles.profileLabel}>{profile.label}</Text>
-                  <Text style={styles.profileDescription}>{profile.description}</Text>
-                </View>
-                <View style={[styles.profileToggle, isSelected && { backgroundColor: profileColor }]}>
-                  <Ionicons
-                    name={isSelected ? 'checkmark' : 'add'}
-                    size={16}
-                    color={isSelected ? Colors.white : Colors.textMuted}
-                  />
-                </View>
+      {/* Active modes summary */}
+      <Animated.View style={[styles.modesCard, cardAnims[1]]}>
+        <View style={styles.modesHeader}>
+          <Text style={styles.modesLabel}>Active accessibility modes</Text>
+          <Text style={styles.modesCount}>{selectedProfiles.length} active</Text>
+        </View>
+        <View style={styles.chipRow}>
+          {activeProfiles.map((profile) => {
+            const color = Colors.profileColors[profile.id] || Colors.primary;
+            return (
+              <View key={profile.id} style={[styles.modeChip, { backgroundColor: `${color}18` }]}>
+                <View style={[styles.modeChipDot, { backgroundColor: color }]} />
+                <Text style={[styles.modeChipText, { color }]}>{profile.label}</Text>
               </View>
+            );
+          })}
+        </View>
+      </Animated.View>
 
-              <View style={styles.profileHazardRow}>
-                {profile.flaggedHazards.slice(0, 3).map((hazard) => (
-                  <Text key={hazard} style={styles.hazardChip}>
-                    {hazard.replace(/_/g, ' ')}
-                  </Text>
-                ))}
-              </View>
-            </TouchableOpacity>
-          );
-        })}
+      {/* Navigation cards */}
+      <View style={styles.navSection}>
+        <Animated.View style={cardAnims[2]}>
+          <TouchableOpacity
+            style={styles.navCard}
+            onPress={() => navigation.navigate('AccessibilityModes')}
+            activeOpacity={0.88}
+            accessibilityRole="button"
+            accessibilityLabel="Manage accessibility modes"
+          >
+            <View style={[styles.navIconWrap, { backgroundColor: Colors.glowPrimary }]}>
+              <Ionicons name="accessibility-outline" size={22} color={Colors.primary} />
+            </View>
+            <View style={styles.navCardText}>
+              <Text style={styles.navCardTitle}>Manage accessibility modes</Text>
+              <Text style={styles.navCardBody}>Toggle modes for hazard filtering</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
+        </Animated.View>
 
-        {saveMessage ? <Text style={styles.saveMessage}>{saveMessage}</Text> : null}
-      </ScrollView>
+        <Animated.View style={cardAnims[3]}>
+          <TouchableOpacity
+            style={styles.navCard}
+            onPress={() => navigation.navigate('Settings')}
+            activeOpacity={0.88}
+            accessibilityRole="button"
+            accessibilityLabel="Open settings"
+          >
+            <View style={[styles.navIconWrap, { backgroundColor: Colors.glowAccent }]}>
+              <Ionicons name="settings-outline" size={22} color={Colors.accent} />
+            </View>
+            <View style={styles.navCardText}>
+              <Text style={styles.navCardTitle}>Settings</Text>
+              <Text style={styles.navCardBody}>Edit name, app info, privacy</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  scrollContent: { paddingHorizontal: 20 },
-  heroCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 28,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: 16,
-  },
-  heroEyebrow: {
-    color: Colors.primaryLight,
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 8,
-    textTransform: 'uppercase',
-  },
-  heroTitle: { color: Colors.text, fontSize: 30, fontWeight: '700', marginBottom: 10 },
-  heroBody: { color: Colors.textSecondary, fontSize: 14, lineHeight: 21 },
-  summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-  summaryCard: {
+  container: {
     flex: 1,
-    borderRadius: 22,
-    padding: 18,
-    backgroundColor: 'rgba(15, 23, 42, 0.92)',
-    borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.14)',
+    backgroundColor: Colors.background,
+    paddingHorizontal: 20,
+    gap: 16,
   },
-  summaryLabel: { color: Colors.textSecondary, fontSize: 12, marginBottom: 6 },
-  summaryValue: { color: Colors.text, fontSize: 21, fontWeight: '700', marginBottom: 6 },
-  summaryMeta: { color: Colors.textMuted, fontSize: 12, lineHeight: 18 },
-  activeModesCard: {
-    backgroundColor: 'rgba(37, 99, 235, 0.14)',
-    borderRadius: 22,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(96, 165, 250, 0.24)',
-    marginBottom: 16,
+  eyebrow: {
+    color: Colors.primary,
+    fontSize: 13,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    marginBottom: 4,
   },
-  cardTitle: { color: Colors.text, fontSize: 18, fontWeight: '700', marginBottom: 10 },
-  modeChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  modeChip: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(15, 23, 42, 0.92)',
-  },
-  modeChipText: { color: Colors.text, fontSize: 12, fontWeight: '600' },
-  userCard: {
+  title: { color: Colors.text, fontSize: 38, fontWeight: '800', letterSpacing: -1 },
+
+  identityCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 22,
-    padding: 18,
-    marginBottom: 18,
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.glassBorder,
+    gap: 14,
   },
-  userAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  avatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 20,
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
   },
-  userAvatarText: { color: Colors.white, fontSize: 24, fontWeight: '700' },
-  userCardCopy: { flex: 1 },
-  userName: { fontSize: 20, fontWeight: '700', color: Colors.text, marginBottom: 4 },
-  userCaption: { fontSize: 13, color: Colors.textSecondary, lineHeight: 18 },
-  onboardingCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 22,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  cardBody: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20, marginBottom: 16 },
-  input: {
+  avatarText: { color: Colors.background, fontSize: 26, fontWeight: '800' },
+  identityInfo: { flex: 1 },
+  identityName: { color: Colors.text, fontSize: 22, fontWeight: '800' },
+  identityCaption: { color: Colors.textSecondary, fontSize: 13, marginTop: 2 },
+  editButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     backgroundColor: Colors.surfaceLight,
-    borderRadius: 14,
-    padding: 16,
-    fontSize: 16,
-    color: Colors.text,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  primaryButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 14,
-    paddingVertical: 16,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  primaryButtonDisabled: { opacity: 0.7 },
-  primaryButtonText: { color: Colors.white, fontSize: 16, fontWeight: '700' },
-  sectionTitle: { fontSize: 19, fontWeight: '700', color: Colors.text, marginBottom: 6 },
-  sectionDescription: { fontSize: 14, color: Colors.textSecondary, marginBottom: 16, lineHeight: 20 },
-  profileCard: {
+
+  onboardCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.glowPrimary,
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.primaryDark + '33',
+    gap: 14,
+  },
+  onboardIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: Colors.glowPrimary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  onboardTextBlock: { flex: 1 },
+  onboardTitle: { color: Colors.text, fontSize: 16, fontWeight: '700' },
+  onboardBody: { color: Colors.textSecondary, fontSize: 13, marginTop: 2 },
+
+  modesCard: {
     backgroundColor: Colors.surface,
     borderRadius: 20,
     padding: 16,
-    marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.12)',
-    gap: 12,
+    borderColor: Colors.glassBorder,
+    gap: 10,
   },
-  profileHeader: { flexDirection: 'row', alignItems: 'center' },
-  profileIcon: {
+  modesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modesLabel: { color: Colors.text, fontSize: 16, fontWeight: '700' },
+  modesCount: { color: Colors.primary, fontSize: 14, fontWeight: '800' },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  modeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  modeChipDot: { width: 6, height: 6, borderRadius: 3 },
+  modeChipText: { fontSize: 12, fontWeight: '700' },
+
+  navSection: { flex: 1, justifyContent: 'flex-end', gap: 10 },
+  navCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.glassBorder,
+    gap: 14,
+  },
+  navIconWrap: {
     width: 46,
     height: 46,
-    borderRadius: 23,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
   },
-  profileCopy: { flex: 1 },
-  profileLabel: { fontSize: 16, fontWeight: '700', color: Colors.text, marginBottom: 4 },
-  profileDescription: { fontSize: 12, color: Colors.textSecondary, lineHeight: 17 },
-  profileToggle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(51, 65, 85, 0.94)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profileHazardRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  hazardChip: {
-    borderRadius: 999,
-    backgroundColor: 'rgba(15, 23, 42, 0.88)',
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '600',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    textTransform: 'capitalize',
-  },
-  saveMessage: { color: Colors.textSecondary, fontSize: 13, marginTop: 12, textAlign: 'center' },
+  navCardText: { flex: 1 },
+  navCardTitle: { color: Colors.text, fontSize: 16, fontWeight: '700' },
+  navCardBody: { color: Colors.textSecondary, fontSize: 13, marginTop: 2 },
 });

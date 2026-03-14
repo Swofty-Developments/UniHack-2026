@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  displayName      String
+  email            String?  @unique
+  passwordHash     String?
+  avatarUrl        String?
+  totalAreaScanned Float    @default(0)
+  territoriesCount Int      @default(0)
+  selectedProfile  String   @default("wheelchair")
+  selectedProfiles String[] @default(["wheelchair"])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+type Coordinate {
+  latitude  Float
+  longitude Float
+}
+
+type Position3D {
+  x Float @default(0)
+  y Float @default(0)
+  z Float @default(0)
+}
+
+type Hazard {
+  type            String
+  severity        String
+  description     String
+  affectsProfiles String[]
+  position3D      Position3D?
+  position2D      Coordinate?
+  confidence      Float      @default(0)
+  detectedBy      String     @default("ai")
+  imageEvidence   String?
+  createdAt       DateTime?
+}
+
+type ClaimedBy {
+  userId      String  @default("")
+  displayName String  @default("")
+  avatarUrl   String?
+}
+
+type Polygon {
+  coordinates Coordinate[]
+}
+
+type HazardSeverityCounts {
+  high   Int @default(0)
+  medium Int @default(0)
+  low    Int @default(0)
+}
+
+type HazardSummary {
+  total      Int                 @default(0)
+  bySeverity HazardSeverityCounts?
+}
+
+model Territory {
+  id            String        @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  description   String        @default("")
+  buildingType  String        @default("other")
+  claimedBy     ClaimedBy?
+  scanDate      DateTime      @default(now())
+  areaSqMeters  Float         @default(0)
+  polygon       Polygon?
+  center        Coordinate?
+  modelUrl      String        @default("")
+  thumbnailUrl  String        @default("")
+  hazards       Hazard[]
+  hazardSummary HazardSummary?
+  fillColor     String        @default("rgba(37, 99, 235, 0.3)")
+  status        String        @default("active")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}

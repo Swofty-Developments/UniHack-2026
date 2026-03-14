@@ -34,18 +34,18 @@ export interface Position3D {
 }
 
 export interface Hazard {
-  id: string;
-  type: HazardType;
-  severity: HazardSeverity;
+  id?: string;
+  type: string;
+  severity: string;
   description: string;
-  affectsProfiles: AccessibilityProfileId[];
-  position3D: Position3D;
-  position2D: {
+  affectsProfiles: string[];
+  position3D?: Position3D | null;
+  position2D?: {
     latitude: number;
     longitude: number;
-  };
+  } | null;
   confidence: number;
-  detectedBy: 'ai' | 'manual';
-  imageEvidence?: string;
-  createdAt: string;
+  detectedBy: string;
+  imageEvidence?: string | null;
+  createdAt?: Date | string | null;
 }

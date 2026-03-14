@@ -1,7 +1,7 @@
 export interface User {
   id: string;
   displayName: string;
-  avatarUrl?: string;
+  avatarUrl?: string | null;
   totalAreaScanned: number;
   territoriesCount: number;
   selectedProfile: string;
@@ -12,7 +12,7 @@ export interface User {
 export interface LeaderboardEntry {
   userId: string;
   displayName: string;
-  avatarUrl?: string;
+  avatarUrl?: string | null;
   totalAreaScanned: number;
   territoriesCount: number;
   rank: number;

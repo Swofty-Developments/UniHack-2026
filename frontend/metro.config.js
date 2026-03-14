@@ -2,7 +2,7 @@ const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
-// Allow loading .html files as assets for WebView
-config.resolver.assetExts.push('html', 'glb', 'gltf');
+// Allow loading 3D model files as assets
+config.resolver.assetExts.push('glb', 'gltf');
 
 module.exports = config;

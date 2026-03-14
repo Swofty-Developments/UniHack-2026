@@ -9,8 +9,10 @@ interface Props {
 export function LoadingOverlay({ message }: Props) {
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color={Colors.primary} />
-      {message && <Text style={styles.text}>{message}</Text>}
+      <View style={styles.card}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        {message ? <Text style={styles.text}>{message}</Text> : null}
+      </View>
     </View>
   );
 }
@@ -18,10 +20,19 @@ export function LoadingOverlay({ message }: Props) {
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    backgroundColor: Colors.overlayLight,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 100,
   },
-  text: { color: Colors.text, fontSize: 14, marginTop: 12 },
+  card: {
+    backgroundColor: Colors.overlayHeavy,
+    borderRadius: 20,
+    padding: 28,
+    alignItems: 'center',
+    gap: 14,
+    borderWidth: 1,
+    borderColor: Colors.glassBorder,
+  },
+  text: { color: Colors.textSecondary, fontSize: 14, fontWeight: '600' },
 });

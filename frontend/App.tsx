@@ -4,17 +4,18 @@ import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ErrorBoundary } from './src/components/common/ErrorBoundary';
+import { TRPCProvider } from './src/providers/TRPCProvider';
 import RootNavigator from './src/navigation/RootNavigator';
 
 const darkTheme = {
   dark: true,
   colors: {
-    primary: '#2563EB',
-    background: '#0F172A',
-    card: '#1E293B',
-    text: '#F8FAFC',
-    border: '#334155',
-    notification: '#EF4444',
+    primary: '#00D4AA',
+    background: '#0B0B14',
+    card: '#161625',
+    text: '#EEEDF5',
+    border: '#2A2A42',
+    notification: '#FF4757',
   },
   fonts: {
     regular: { fontFamily: 'System', fontWeight: '400' as const },
@@ -29,10 +30,12 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ErrorBoundary>
-          <NavigationContainer theme={darkTheme}>
-            <RootNavigator />
-            <StatusBar style="light" />
-          </NavigationContainer>
+          <TRPCProvider>
+            <NavigationContainer theme={darkTheme}>
+              <RootNavigator />
+              <StatusBar style="light" />
+            </NavigationContainer>
+          </TRPCProvider>
         </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>

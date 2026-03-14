@@ -30,7 +30,7 @@ export function isWithinMonashShowcaseBounds(
 export function territoryIsInMonashShowcase(territory: Territory) {
   return (
     isWithinMonashShowcaseBounds(territory.center) ||
-    territory.polygon.coordinates.some((coordinate) => isWithinMonashShowcaseBounds(coordinate))
+    (territory.polygon?.coordinates ?? []).some((coordinate) => isWithinMonashShowcaseBounds(coordinate))
   );
 }
 

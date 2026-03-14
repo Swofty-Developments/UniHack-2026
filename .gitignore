@@ -13,6 +13,9 @@ frontend/dist/
 # TypeScript build
 backend/dist/
 
+# Prisma generated client
+backend/src/generated/
+
 # OS files
 .DS_Store
 Thumbs.db

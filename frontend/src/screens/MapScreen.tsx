@@ -1,401 +1,260 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import * as Location from 'expo-location';
+import { ActivityIndicator, Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Mapbox from '@rnmapbox/maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { WebView, WebViewMessageEvent } from 'react-native-webview';
-import { useTerritoryStore } from '../stores/useTerritoryStore';
+import { trpc } from '../utils/trpc';
 import { Colors } from '../constants/colors';
-import { Territory } from '../types/territory';
-import { formatArea } from '../utils/formatArea';
 import { FLOATING_TAB_BAR_HEIGHT } from '../components/navigation/FloatingTabBar';
 import {
-  coerceToMonashShowcaseLocation,
-  territoryIsInMonashShowcase,
-} from '../constants/showcase';
+  MAPBOX_ACCESS_TOKEN,
+  MAPBOX_STYLE_URL,
+  INITIAL_CENTER,
+  INITIAL_ZOOM,
+  INITIAL_PITCH,
+} from '../constants/mapConfig';
+import { coerceToMonashShowcaseLocation, territoryIsInMonashShowcase } from '../constants/showcase';
+import { useLocationTracking } from '../hooks/useLocationTracking';
+import { Territory } from '../types/territory';
+import { TerritorySelectionSheet } from '../components/map/TerritorySelectionSheet';
+import { buildTerritoriesGeoJSON, buildCentersGeoJSON } from '../utils/territoryGeoJSON';
+import { useFadeIn, usePulse } from '../hooks/useAnimations';
 
-type ViewerMessage =
-  | { type: 'MAP_READY' }
-  | { type: 'SELECT_TERRITORY'; territoryId: string }
-  | { type: 'CLEAR_SELECTION' }
-  | { type: 'MAP_ERROR'; message?: string };
+Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN);
 
-interface UserMapLocation {
-  latitude: number;
-  longitude: number;
-  accuracy?: number | null;
-  heading?: number | null;
-}
-
-const mapViewerHtml = require('../../assets/territory-map-viewer.html');
-
-function formatBuildingType(buildingType: Territory['buildingType']) {
-  return buildingType.replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
-function formatHazardSummary(total: number) {
-  return total === 1 ? '1 barrier' : `${total} barriers`;
-}
-
-function formatStatus(status: Territory['status']) {
-  return status.replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
-function toUserMapLocation(coords: Location.LocationObjectCoords): UserMapLocation {
-  return {
-    latitude: coords.latitude,
-    longitude: coords.longitude,
-    accuracy: coords.accuracy,
-    heading: coords.heading,
-  };
+function getDistanceMeters(
+  lat1: number, lon1: number,
+  lat2: number, lon2: number,
+): number {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
-  const webViewRef = useRef<WebView | null>(null);
-  const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
-  const headingSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
-  const { territories, isLoading, error, fetchTerritories } = useTerritoryStore();
-  const [viewerReady, setViewerReady] = useState(false);
-  const [viewerError, setViewerError] = useState<string | null>(null);
+  const cameraRef = useRef<Mapbox.Camera | null>(null);
+  const { data: rawTerritories = [], isLoading, error: queryError, refetch } = trpc.territory.getAll.useQuery();
+  const territories: Territory[] = rawTerritories as Territory[];
+  const error = queryError?.message ?? null;
   const [selectedTerritoryId, setSelectedTerritoryId] = useState<string | null>(null);
-  const [userLocation, setUserLocation] = useState<UserMapLocation | null>(null);
-  const [locationDenied, setLocationDenied] = useState(false);
-  const [isLocating, setIsLocating] = useState(false);
+  const { userLocation, locationDenied, isLocating, requestLocation } = useLocationTracking();
 
-  useEffect(() => {
-    void fetchTerritories();
-  }, [fetchTerritories]);
+  const controlsFade = useFadeIn(300);
+  const livePulse = usePulse(2400);
 
   const showcaseTerritories = useMemo(
-    () => territories.filter((territory) => territoryIsInMonashShowcase(territory)),
-    [territories]
+    () => territories.filter((t) => territoryIsInMonashShowcase(t)),
+    [territories],
   );
 
-  const showcaseLocation = useMemo(
-    () => coerceToMonashShowcaseLocation(userLocation),
-    [userLocation]
-  );
+  // Auto-request location on mount so the blue dot shows
+  useEffect(() => {
+    void requestLocation();
+  }, []);
 
   useEffect(() => {
-    if (
-      selectedTerritoryId &&
-      !showcaseTerritories.some((territory) => territory.id === selectedTerritoryId)
-    ) {
+    if (selectedTerritoryId && !showcaseTerritories.some((t) => t.id === selectedTerritoryId)) {
       setSelectedTerritoryId(null);
     }
   }, [selectedTerritoryId, showcaseTerritories]);
 
   const selectedTerritory = useMemo(
-    () => showcaseTerritories.find((territory) => territory.id === selectedTerritoryId) ?? null,
-    [selectedTerritoryId, showcaseTerritories]
+    () => showcaseTerritories.find((t) => t.id === selectedTerritoryId) ?? null,
+    [selectedTerritoryId, showcaseTerritories],
   );
 
-  const postToViewer = useCallback(
-    (message: Record<string, unknown>) => {
-      if (!viewerReady || !webViewRef.current) {
-        return;
-      }
+  const userDistanceToSelected = useMemo(() => {
+    if (!selectedTerritory?.center || !userLocation) return null;
+    return getDistanceMeters(
+      userLocation.latitude,
+      userLocation.longitude,
+      selectedTerritory.center.latitude,
+      selectedTerritory.center.longitude,
+    );
+  }, [selectedTerritory, userLocation]);
 
-      webViewRef.current.postMessage(JSON.stringify(message));
-    },
-    [viewerReady]
+  const territoriesGeoJSON = useMemo(
+    () => buildTerritoriesGeoJSON(showcaseTerritories),
+    [showcaseTerritories],
   );
 
-  const bootstrapLocationTracking = useCallback(async () => {
-    setIsLocating(true);
+  const centersGeoJSON = useMemo(
+    () => buildCentersGeoJSON(showcaseTerritories),
+    [showcaseTerritories],
+  );
 
-    try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== 'granted') {
-        setLocationDenied(true);
-        return;
-      }
-
-      setLocationDenied(false);
-
-      const currentPosition = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      setUserLocation(toUserMapLocation(currentPosition.coords));
-
-      headingSubscriptionRef.current?.remove();
-      headingSubscriptionRef.current = await Location.watchHeadingAsync((heading) => {
-        const resolvedHeading =
-          heading.trueHeading >= 0 && Number.isFinite(heading.trueHeading)
-            ? heading.trueHeading
-            : heading.magHeading;
-
-        if (!Number.isFinite(resolvedHeading)) {
-          return;
-        }
-
-        setUserLocation((currentLocation) => {
-          if (!currentLocation) {
-            return currentLocation;
-          }
-
-          return {
-            ...currentLocation,
-            heading: resolvedHeading,
-          };
+  const handleTerritoryPress = useCallback(
+    (event: any) => {
+      const id = event.features?.[0]?.properties?.id;
+      if (!id) return;
+      setSelectedTerritoryId(id);
+      const territory = showcaseTerritories.find((t) => t.id === id);
+      if (territory?.center) {
+        cameraRef.current?.setCamera({
+          centerCoordinate: [territory.center.longitude, territory.center.latitude],
+          zoomLevel: 17.5,
+          animationDuration: 600,
         });
-      });
-
-      locationSubscriptionRef.current?.remove();
-      locationSubscriptionRef.current = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.Balanced,
-          distanceInterval: 15,
-          timeInterval: 15000,
-        },
-        (position) => {
-          setUserLocation(toUserMapLocation(position.coords));
-        }
-      );
-    } catch {
-      setLocationDenied(true);
-    } finally {
-      setIsLocating(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void bootstrapLocationTracking();
-
-    return () => {
-      locationSubscriptionRef.current?.remove();
-      locationSubscriptionRef.current = null;
-      headingSubscriptionRef.current?.remove();
-      headingSubscriptionRef.current = null;
-    };
-  }, [bootstrapLocationTracking]);
-
-  useEffect(() => {
-    if (!viewerReady) {
-      return;
-    }
-
-    postToViewer({
-      type: 'SET_TERRITORIES',
-      territories: showcaseTerritories.map((territory) => ({
-        id: territory.id,
-        name: territory.name,
-        buildingType: territory.buildingType,
-        fillColor: territory.fillColor,
-        areaSqMeters: territory.areaSqMeters,
-        center: territory.center,
-        polygon: territory.polygon,
-        claimedByName: territory.claimedBy.displayName,
-        hazardTotal: territory.hazardSummary.total,
-        status: territory.status,
-      })),
-    });
-  }, [postToViewer, showcaseTerritories, viewerReady]);
-
-  useEffect(() => {
-    if (!viewerReady) {
-      return;
-    }
-
-    postToViewer({
-      type: 'SET_USER_LOCATION',
-      location: showcaseLocation,
-    });
-  }, [postToViewer, showcaseLocation, viewerReady]);
-
-  useEffect(() => {
-    if (!viewerReady) {
-      return;
-    }
-
-    if (selectedTerritoryId) {
-      postToViewer({
-        type: 'SELECT_TERRITORY',
-        territoryId: selectedTerritoryId,
-      });
-      return;
-    }
-
-    postToViewer({ type: 'CLEAR_SELECTION' });
-  }, [postToViewer, selectedTerritoryId, viewerReady]);
-
-  const onWebViewMessage = useCallback((event: WebViewMessageEvent) => {
-    let payload: ViewerMessage;
-
-    try {
-      payload = JSON.parse(event.nativeEvent.data) as ViewerMessage;
-    } catch {
-      return;
-    }
-
-    if (payload.type === 'MAP_READY') {
-      setViewerReady(true);
-      setViewerError(null);
-      return;
-    }
-
-    if (payload.type === 'SELECT_TERRITORY') {
-      setSelectedTerritoryId(payload.territoryId);
-      return;
-    }
-
-    if (payload.type === 'CLEAR_SELECTION') {
-      setSelectedTerritoryId(null);
-      return;
-    }
-
-    if (payload.type === 'MAP_ERROR') {
-      setViewerError(payload.message || 'Map renderer failed to load.');
-    }
-  }, []);
+      }
+    },
+    [showcaseTerritories],
+  );
 
   const handleLocatePress = useCallback(async () => {
-    if (showcaseLocation) {
-      postToViewer({ type: 'FOCUS_USER_LOCATION' });
-      return;
-    }
-
-    setIsLocating(true);
-    try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== 'granted') {
-        setLocationDenied(true);
-        return;
-      }
-
-      const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
+    const loc = userLocation ?? (await requestLocation());
+    if (!loc) return;
+    const coerced = coerceToMonashShowcaseLocation(loc);
+    if (coerced) {
+      cameraRef.current?.setCamera({
+        centerCoordinate: [coerced.longitude, coerced.latitude],
+        zoomLevel: 17,
+        animationDuration: 600,
       });
-      const nextLocation = toUserMapLocation(position.coords);
-      setLocationDenied(false);
-      setUserLocation(nextLocation);
-
-      if (viewerReady) {
-        postToViewer({
-          type: 'SET_USER_LOCATION',
-          location: coerceToMonashShowcaseLocation(nextLocation),
-        });
-        postToViewer({ type: 'FOCUS_USER_LOCATION' });
-      }
-    } catch {
-      setLocationDenied(true);
-    } finally {
-      setIsLocating(false);
     }
-  }, [postToViewer, showcaseLocation, viewerReady]);
-
-  const handleCloseSelection = useCallback(() => {
-    setSelectedTerritoryId(null);
-    postToViewer({ type: 'CLEAR_SELECTION' });
-  }, [postToViewer]);
-
-  const errorMessage = viewerError || error;
+  }, [userLocation, requestLocation]);
 
   return (
     <View style={styles.container}>
-      <WebView
-        ref={webViewRef}
-        source={mapViewerHtml}
-        style={styles.webview}
-        onMessage={onWebViewMessage}
-        javaScriptEnabled
-        domStorageEnabled
-        allowFileAccess
-        originWhitelist={['*']}
-      />
+      <Mapbox.MapView
+        style={styles.map}
+        styleURL={MAPBOX_STYLE_URL}
+        onPress={() => setSelectedTerritoryId(null)}
+      >
+        <Mapbox.Camera
+          ref={cameraRef}
+          defaultSettings={{
+            centerCoordinate: INITIAL_CENTER,
+            zoomLevel: INITIAL_ZOOM,
+            pitch: INITIAL_PITCH,
+          }}
+        />
 
-      <View pointerEvents="box-none" style={StyleSheet.absoluteFillObject}>
-        {errorMessage ? (
-          <View style={[styles.errorBanner, { top: insets.top + 14 }]}>
-            <Text style={styles.errorText} numberOfLines={2}>
-              {errorMessage}
-            </Text>
-            <TouchableOpacity
-              style={styles.errorAction}
-              onPress={() => {
-                setViewerError(null);
-                setViewerReady(false);
-                webViewRef.current?.reload();
-                void fetchTerritories();
-              }}
-              activeOpacity={0.92}
-            >
-              <Ionicons name="refresh" size={14} color={Colors.white} />
-            </TouchableOpacity>
-          </View>
-        ) : null}
+        <Mapbox.UserLocation
+          visible
+          animated
+          renderMode="native"
+          androidRenderMode="compass"
+          showsUserHeadingIndicator
+        />
 
-        <View style={[styles.controlStack, { top: insets.top + 18 }]}>
+        <Mapbox.ShapeSource
+          id="territories"
+          shape={territoriesGeoJSON}
+          onPress={handleTerritoryPress}
+        >
+          <Mapbox.FillLayer
+            id="territory-fills"
+            minZoomLevel={0}
+            maxZoomLevel={24}
+            filter={['!=', ['get', 'id'], selectedTerritoryId ?? '']}
+            style={{
+              fillColor: ['get', 'fillColor'],
+              fillOpacity: 0.35,
+            }}
+          />
+          <Mapbox.FillLayer
+            id="selected-fill"
+            minZoomLevel={0}
+            maxZoomLevel={24}
+            filter={['==', ['get', 'id'], selectedTerritoryId ?? '']}
+            style={{
+              fillColor: ['get', 'fillColor'],
+              fillOpacity: 0.6,
+            }}
+          />
+          <Mapbox.LineLayer
+            id="territory-outlines"
+            style={{
+              lineColor: ['get', 'fillColor'],
+              lineWidth: 2,
+              lineOpacity: 0.8,
+            }}
+          />
+        </Mapbox.ShapeSource>
+
+        <Mapbox.ShapeSource id="territory-centers" shape={centersGeoJSON}>
+          <Mapbox.CircleLayer
+            id="territory-markers"
+            style={{
+              circleColor: ['get', 'fillColor'],
+              circleRadius: 5,
+              circleStrokeColor: 'rgba(255,255,255,0.6)',
+              circleStrokeWidth: 1.5,
+            }}
+          />
+        </Mapbox.ShapeSource>
+      </Mapbox.MapView>
+
+      {/* Top header overlay */}
+      <Animated.View style={[styles.headerOverlay, { top: insets.top + 12 }, controlsFade]}>
+        <View style={styles.headerCard}>
+          <Ionicons name="map" size={16} color={Colors.primary} />
+          <Text style={styles.headerTitle}>AccessAtlas</Text>
+          <Animated.View style={[styles.liveDot, livePulse]} />
+        </View>
+      </Animated.View>
+
+      {error ? (
+        <View style={[styles.errorBanner, { top: insets.top + 58 }]}>
+          <Ionicons name="alert-circle" size={16} color={Colors.hazardHigh} />
+          <Text style={styles.errorText} numberOfLines={2}>{error}</Text>
           <TouchableOpacity
-            style={[styles.iconButton, locationDenied && styles.iconButtonMuted]}
-            onPress={() => void handleLocatePress()}
+            style={styles.errorAction}
+            onPress={() => void refetch()}
             activeOpacity={0.92}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading territories"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            {isLocating ? (
-              <ActivityIndicator color={Colors.text} />
-            ) : (
-              <Ionicons
-                name={locationDenied ? 'location-outline' : 'locate-outline'}
-                size={20}
-                color={Colors.text}
-              />
-            )}
+            <Ionicons name="refresh" size={14} color={Colors.white} />
           </TouchableOpacity>
         </View>
+      ) : null}
 
-        {selectedTerritory ? (
-          <View style={[styles.selectionSheet, { bottom: insets.bottom + FLOATING_TAB_BAR_HEIGHT + 12 }]}>
-            <View style={styles.selectionHeader}>
-              <View style={styles.selectionTitleBlock}>
-                <Text style={styles.selectionTitle}>{selectedTerritory.name}</Text>
-                <Text style={styles.selectionSubtitle}>
-                  {formatBuildingType(selectedTerritory.buildingType)} | {formatArea(selectedTerritory.areaSqMeters)}
-                </Text>
-              </View>
-              <View style={styles.selectionHeaderRight}>
-                <View style={styles.statusPill}>
-                  <Text style={styles.statusPillText}>{formatStatus(selectedTerritory.status)}</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.closeButton}
-                  onPress={handleCloseSelection}
-                  activeOpacity={0.92}
-                >
-                  <Ionicons name="close" size={16} color={Colors.text} />
-                </TouchableOpacity>
-              </View>
-            </View>
+      <Animated.View style={[styles.controlStack, { top: insets.top + 12 }, controlsFade]}>
+        <TouchableOpacity
+          style={[styles.iconButton, locationDenied && styles.iconButtonMuted]}
+          onPress={() => void handleLocatePress()}
+          activeOpacity={0.88}
+          accessibilityRole="button"
+          accessibilityLabel={locationDenied ? 'Enable location access' : 'Center on my location'}
+          accessibilityState={{ disabled: isLocating }}
+        >
+          {isLocating ? (
+            <ActivityIndicator color={Colors.primary} size="small" />
+          ) : (
+            <Ionicons
+              name={locationDenied ? 'location-outline' : 'locate-outline'}
+              size={20}
+              color={Colors.primary}
+            />
+          )}
+        </TouchableOpacity>
+      </Animated.View>
 
-            <Text style={styles.selectionDescription} numberOfLines={2}>
-              {selectedTerritory.description}
-            </Text>
+      {selectedTerritory ? (
+        <TerritorySelectionSheet
+          territory={selectedTerritory}
+          userDistance={userDistanceToSelected}
+          onClose={() => setSelectedTerritoryId(null)}
+          style={{ bottom: insets.bottom + FLOATING_TAB_BAR_HEIGHT + 12 }}
+        />
+      ) : null}
 
-            <View style={styles.selectionMetaRow}>
-              <View style={styles.metaPill}>
-                <Ionicons name="warning-outline" size={14} color={Colors.primaryLight} />
-                <Text style={styles.metaText}>
-                  {formatHazardSummary(selectedTerritory.hazardSummary.total)}
-                </Text>
-              </View>
-              <View style={styles.metaPill}>
-                <Ionicons name="person-outline" size={14} color={Colors.primaryLight} />
-                <Text style={styles.metaText}>{selectedTerritory.claimedBy.displayName}</Text>
-              </View>
-            </View>
-          </View>
-        ) : null}
-      </View>
-
-      {(isLoading || !viewerReady) && !viewerError ? (
+      {isLoading ? (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="small" color={Colors.primary} />
+            <Text style={styles.loadingText}>Loading territories</Text>
+          </View>
         </View>
       ) : null}
     </View>
@@ -404,132 +263,80 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  webview: { flex: 1, backgroundColor: Colors.background },
-  controlStack: {
-    position: 'absolute',
-    right: 16,
-    gap: 10,
-  },
-  iconButton: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
-    backgroundColor: 'rgba(15, 23, 42, 0.82)',
+  map: { flex: 1 },
+  headerOverlay: { position: 'absolute', left: 16 },
+  headerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.overlay,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.18)',
+    borderColor: Colors.glassBorder,
+  },
+  headerTitle: {
+    color: Colors.text,
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.primary,
+  },
+  controlStack: { position: 'absolute', right: 16, gap: 10 },
+  iconButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: Colors.overlay,
+    borderWidth: 1,
+    borderColor: Colors.glassBorder,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  iconButtonMuted: {
-    backgroundColor: 'rgba(30, 41, 59, 0.92)',
-  },
+  iconButtonMuted: { backgroundColor: Colors.overlayMedium },
   errorBanner: {
     position: 'absolute',
     left: 16,
     right: 74,
-    backgroundColor: 'rgba(127, 29, 29, 0.94)',
-    borderRadius: 18,
+    backgroundColor: Colors.hazardHigh + '22',
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  errorText: {
-    flex: 1,
-    color: Colors.white,
-    fontSize: 12,
-    fontWeight: '600',
-    lineHeight: 18,
-  },
+  errorText: { flex: 1, color: Colors.white, fontSize: 12, fontWeight: '600', lineHeight: 18 },
   errorAction: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(239, 68, 68, 0.22)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.hazardHigh + '40',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  selectionSheet: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    backgroundColor: 'rgba(15, 23, 42, 0.94)',
-    borderRadius: 26,
-    borderWidth: 1,
-    borderColor: 'rgba(96, 165, 250, 0.22)',
-    padding: 18,
-    gap: 14,
-  },
-  selectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  selectionTitleBlock: {
-    flex: 1,
-    gap: 4,
-  },
-  selectionTitle: {
-    color: Colors.text,
-    fontSize: 21,
-    fontWeight: '700',
-  },
-  selectionSubtitle: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-  },
-  selectionHeaderRight: {
-    alignItems: 'flex-end',
-    gap: 8,
-  },
-  statusPill: {
-    borderRadius: 999,
-    backgroundColor: 'rgba(16, 185, 129, 0.16)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  statusPillText: {
-    color: Colors.accent,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(30, 41, 59, 0.96)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  selectionDescription: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  selectionMetaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  metaPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(30, 41, 59, 0.94)',
-  },
-  metaText: {
-    color: Colors.text,
-    fontSize: 12,
-    fontWeight: '600',
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(2, 6, 23, 0.24)',
+    backgroundColor: Colors.overlayLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: Colors.overlayHeavy,
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: Colors.glassBorder,
+  },
+  loadingText: { color: Colors.textSecondary, fontSize: 14, fontWeight: '600' },
 });
