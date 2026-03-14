@@ -1,11 +1,11 @@
 ﻿# AccessAtlas
 
-AccessAtlas is a React Native + Express prototype for mapping accessible indoor spaces, viewing hazard-tagged 3D scans, and demoing AI-assisted accessibility analysis for UNIHACK 2026.
+Upload a 3D LiDAR scan (GLB/glTF from Polycam) of any indoor space → Claude Sonnet 4 detects accessibility hazards → users browse colour-coded hazard pins in a first-person 3D viewer and filter by their accessibility profiles. Scanned spaces appear as territories on a live Mapbox map with gamified leaderboards. Built for UNIHACK 2026.
 
 ## Project Structure
 
-- `frontend/`: Expo React Native app
-- `backend/`: Express + TypeScript API with MongoDB
+- `frontend/`: Expo (React Native 0.81.5) app with TypeScript
+- `backend/`: Express 5 + tRPC + Prisma API with MongoDB
 - `docker-compose.yml`: Docker setup for backend and MongoDB
 
 ## Quick Start
@@ -16,7 +16,7 @@ The fastest local setup is to run MongoDB locally and run the backend on your ho
 
 1. Create `backend/.env` from `backend/.env.example`.
 2. Set `MONGO_URI=mongodb://localhost:27017/accessatlas`.
-3. Set your real `GEMINI_API_KEY`.
+3. Set your real `ANTHROPIC_API_KEY` (Claude Sonnet 4 vision API).
 4. Install dependencies and seed the database:
 
 ```powershell
@@ -44,13 +44,7 @@ npm install
 npm start
 ```
 
-The checked-in example is `frontend/.env.example`. Your local ignored `frontend/.env` is currently set to:
-
-```env
-EXPO_PUBLIC_API_URL=http://192.168.1.103:3001/api
-```
-
-After changing `frontend/.env`, restart Expo so the new API URL is picked up.
+Set `EXPO_PUBLIC_API_URL` in `frontend/.env` to point at your backend (see examples below). Restart Expo after changing it.
 
 ## Running On Devices
 
@@ -81,12 +75,7 @@ npm run android
 Windows cannot run the iOS Simulator, so the supported iPhone flow here is a physical device with Expo Go.
 
 1. Make sure the iPhone and this PC are on the same Wi-Fi network.
-2. Keep `frontend/.env` pointed at your LAN IP:
-
-```env
-EXPO_PUBLIC_API_URL=http://192.168.1.103:3001/api
-```
-
+2. Set `frontend/.env` to your machine's LAN IP (e.g. `EXPO_PUBLIC_API_URL=http://<YOUR_LAN_IP>:3001/api`).
 3. Install Expo Go on the iPhone.
 4. Start the backend and frontend.
 5. Scan the QR code from the Expo terminal.
