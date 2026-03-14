@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Mapbox from '@rnmapbox/maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { Camera as MapboxCameraRef } from '@rnmapbox/maps';
+import MapView, { Marker, Polygon, type Region } from 'react-native-maps';
 import { trpc } from '../utils/trpc';
 import { Colors } from '../constants/colors';
 import { FLOATING_TAB_BAR_HEIGHT } from '../components/navigation/FloatingTabBar';
@@ -20,7 +21,27 @@ import { TerritorySelectionSheet } from '../components/map/TerritorySelectionShe
 import { buildTerritoriesGeoJSON, buildCentersGeoJSON } from '../utils/territoryGeoJSON';
 import { useFadeIn, usePulse } from '../hooks/useAnimations';
 
-Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN);
+type MapboxModule = typeof import('@rnmapbox/maps');
+type ExpoGoMapRef = React.ElementRef<typeof MapView>;
+
+let mapboxUnavailableReason: string | null = null;
+
+function loadMapbox(): MapboxModule | null {
+  try {
+    const loadedModule = require('@rnmapbox/maps') as MapboxModule & {
+      default?: MapboxModule;
+    };
+    const resolvedModule = loadedModule.default ?? loadedModule;
+    resolvedModule.setAccessToken(MAPBOX_ACCESS_TOKEN);
+    return resolvedModule;
+  } catch (error) {
+    mapboxUnavailableReason =
+      error instanceof Error ? error.message : '@rnmapbox/maps native code is unavailable.';
+    return null;
+  }
+}
+
+const mapboxModule = loadMapbox();
 
 function getDistanceMeters(
   lat1: number, lon1: number,
@@ -40,7 +61,9 @@ function getDistanceMeters(
 
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
-  const cameraRef = useRef<Mapbox.Camera | null>(null);
+  const Mapbox = mapboxModule;
+  const cameraRef = useRef<MapboxCameraRef | null>(null);
+  const expoGoMapRef = useRef<ExpoGoMapRef | null>(null);
   const { data: rawTerritories = [], isLoading, error: queryError, refetch } = trpc.territory.getAll.useQuery();
   const territories: Territory[] = rawTerritories as Territory[];
   const error = queryError?.message ?? null;
@@ -91,6 +114,32 @@ export default function MapScreen() {
     [showcaseTerritories],
   );
 
+  const expoGoTerritoryPolygons = useMemo(
+    () =>
+      showcaseTerritories
+        .filter((territory) => territory.polygon?.coordinates?.length)
+        .map((territory) => ({
+          id: territory.id,
+          fillColor: territory.fillColor,
+          coordinates:
+            territory.polygon?.coordinates.map((coordinate) => ({
+              latitude: coordinate.latitude,
+              longitude: coordinate.longitude,
+            })) ?? [],
+        })),
+    [showcaseTerritories],
+  );
+
+  const defaultRegion = useMemo<Region>(
+    () => ({
+      latitude: INITIAL_CENTER[1],
+      longitude: INITIAL_CENTER[0],
+      latitudeDelta: 0.015,
+      longitudeDelta: 0.015,
+    }),
+    [],
+  );
+
   const handleTerritoryPress = useCallback(
     (event: any) => {
       const id = event.features?.[0]?.properties?.id;
@@ -108,90 +157,178 @@ export default function MapScreen() {
     [showcaseTerritories],
   );
 
+  const handleExpoGoTerritoryPress = useCallback(
+    (territory: Territory) => {
+      setSelectedTerritoryId(territory.id);
+      if (territory.center) {
+        expoGoMapRef.current?.animateToRegion(
+          {
+            latitude: territory.center.latitude,
+            longitude: territory.center.longitude,
+            latitudeDelta: 0.004,
+            longitudeDelta: 0.004,
+          },
+          600,
+        );
+      }
+    },
+    [],
+  );
+
   const handleLocatePress = useCallback(async () => {
     const loc = userLocation ?? (await requestLocation());
     if (!loc) return;
     const coerced = coerceToMonashShowcaseLocation(loc);
     if (coerced) {
-      cameraRef.current?.setCamera({
-        centerCoordinate: [coerced.longitude, coerced.latitude],
-        zoomLevel: 17,
-        animationDuration: 600,
-      });
+      if (Mapbox) {
+        cameraRef.current?.setCamera({
+          centerCoordinate: [coerced.longitude, coerced.latitude],
+          zoomLevel: 17,
+          animationDuration: 600,
+        });
+        return;
+      }
+
+      expoGoMapRef.current?.animateToRegion(
+        {
+          latitude: coerced.latitude,
+          longitude: coerced.longitude,
+          latitudeDelta: 0.006,
+          longitudeDelta: 0.006,
+        },
+        600,
+      );
     }
-  }, [userLocation, requestLocation]);
+  }, [Mapbox, userLocation, requestLocation]);
 
   return (
     <View style={styles.container}>
-      <Mapbox.MapView
-        style={styles.map}
-        styleURL={MAPBOX_STYLE_URL}
-        onPress={() => setSelectedTerritoryId(null)}
-      >
-        <Mapbox.Camera
-          ref={cameraRef}
-          defaultSettings={{
-            centerCoordinate: INITIAL_CENTER,
-            zoomLevel: INITIAL_ZOOM,
-            pitch: INITIAL_PITCH,
-          }}
-        />
-
-        <Mapbox.UserLocation
-          visible
-          animated
-          renderMode="native"
-          androidRenderMode="compass"
-          showsUserHeadingIndicator
-        />
-
-        <Mapbox.ShapeSource
-          id="territories"
-          shape={territoriesGeoJSON}
-          onPress={handleTerritoryPress}
+      {Mapbox ? (
+        <Mapbox.MapView
+          style={styles.map}
+          styleURL={MAPBOX_STYLE_URL}
+          onPress={() => setSelectedTerritoryId(null)}
         >
-          <Mapbox.FillLayer
-            id="territory-fills"
-            minZoomLevel={0}
-            maxZoomLevel={24}
-            filter={['!=', ['get', 'id'], selectedTerritoryId ?? '']}
-            style={{
-              fillColor: ['get', 'fillColor'],
-              fillOpacity: 0.35,
+          <Mapbox.Camera
+            ref={cameraRef}
+            defaultSettings={{
+              centerCoordinate: INITIAL_CENTER,
+              zoomLevel: INITIAL_ZOOM,
+              pitch: INITIAL_PITCH,
             }}
           />
-          <Mapbox.FillLayer
-            id="selected-fill"
-            minZoomLevel={0}
-            maxZoomLevel={24}
-            filter={['==', ['get', 'id'], selectedTerritoryId ?? '']}
-            style={{
-              fillColor: ['get', 'fillColor'],
-              fillOpacity: 0.6,
-            }}
-          />
-          <Mapbox.LineLayer
-            id="territory-outlines"
-            style={{
-              lineColor: ['get', 'fillColor'],
-              lineWidth: 2,
-              lineOpacity: 0.8,
-            }}
-          />
-        </Mapbox.ShapeSource>
 
-        <Mapbox.ShapeSource id="territory-centers" shape={centersGeoJSON}>
-          <Mapbox.CircleLayer
-            id="territory-markers"
-            style={{
-              circleColor: ['get', 'fillColor'],
-              circleRadius: 5,
-              circleStrokeColor: 'rgba(255,255,255,0.6)',
-              circleStrokeWidth: 1.5,
-            }}
+          <Mapbox.UserLocation
+            visible
+            animated
+            renderMode={Mapbox.UserLocationRenderMode.Native}
+            androidRenderMode="compass"
+            showsUserHeadingIndicator
           />
-        </Mapbox.ShapeSource>
-      </Mapbox.MapView>
+
+          <Mapbox.ShapeSource
+            id="territories"
+            shape={territoriesGeoJSON}
+            onPress={handleTerritoryPress}
+          >
+            <Mapbox.FillLayer
+              id="territory-fills"
+              minZoomLevel={0}
+              maxZoomLevel={24}
+              filter={['!=', ['get', 'id'], selectedTerritoryId ?? '']}
+              style={{
+                fillColor: ['get', 'fillColor'],
+                fillOpacity: 0.35,
+              }}
+            />
+            <Mapbox.FillLayer
+              id="selected-fill"
+              minZoomLevel={0}
+              maxZoomLevel={24}
+              filter={['==', ['get', 'id'], selectedTerritoryId ?? '']}
+              style={{
+                fillColor: ['get', 'fillColor'],
+                fillOpacity: 0.6,
+              }}
+            />
+            <Mapbox.LineLayer
+              id="territory-outlines"
+              style={{
+                lineColor: ['get', 'fillColor'],
+                lineWidth: 2,
+                lineOpacity: 0.8,
+              }}
+            />
+          </Mapbox.ShapeSource>
+
+          <Mapbox.ShapeSource id="territory-centers" shape={centersGeoJSON}>
+            <Mapbox.CircleLayer
+              id="territory-markers"
+              style={{
+                circleColor: ['get', 'fillColor'],
+                circleRadius: 5,
+                circleStrokeColor: 'rgba(255,255,255,0.6)',
+                circleStrokeWidth: 1.5,
+              }}
+            />
+          </Mapbox.ShapeSource>
+        </Mapbox.MapView>
+      ) : (
+        <View style={styles.map}>
+          <MapView
+            ref={expoGoMapRef}
+            style={StyleSheet.absoluteFill}
+            initialRegion={defaultRegion}
+            onPress={() => setSelectedTerritoryId(null)}
+            showsUserLocation
+            showsMyLocationButton={false}
+            followsUserLocation={false}
+            toolbarEnabled={false}
+            mapPadding={{ top: 0, right: 0, bottom: 0, left: 0 }}
+            customMapStyle={expoGoDarkMapStyle}
+          >
+            {expoGoTerritoryPolygons.map((territoryPolygon) => (
+              <Polygon
+                key={territoryPolygon.id}
+                coordinates={territoryPolygon.coordinates}
+                tappable
+                onPress={() => {
+                  const territory = showcaseTerritories.find((item) => item.id === territoryPolygon.id);
+                  if (territory) {
+                    handleExpoGoTerritoryPress(territory);
+                  }
+                }}
+                strokeColor={territoryPolygon.fillColor}
+                fillColor={
+                  territoryPolygon.id === selectedTerritoryId
+                    ? `${territoryPolygon.fillColor}99`
+                    : `${territoryPolygon.fillColor}59`
+                }
+                strokeWidth={2}
+              />
+            ))}
+
+            {showcaseTerritories
+              .filter((territory) => territory.center)
+              .map((territory) => (
+                <Marker
+                  key={territory.id}
+                  coordinate={{
+                    latitude: territory.center!.latitude,
+                    longitude: territory.center!.longitude,
+                  }}
+                  pinColor={territory.fillColor}
+                  onPress={() => handleExpoGoTerritoryPress(territory)}
+                />
+              ))}
+          </MapView>
+
+          <View style={styles.expoGoBadge}>
+            <Ionicons name="phone-portrait-outline" size={14} color={Colors.primary} />
+            <Text style={styles.expoGoBadgeText}>Expo Go map mode</Text>
+          </View>
+        </View>
+      )}
 
       {/* Top header overlay */}
       <Animated.View style={[styles.headerOverlay, { top: insets.top + 12 }, controlsFade]}>
@@ -264,6 +401,42 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
+  expoGoBadge: {
+    position: 'absolute',
+    left: 16,
+    bottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: Colors.overlay,
+    borderWidth: 1,
+    borderColor: Colors.glassBorder,
+  },
+  expoGoBadgeText: {
+    color: Colors.text,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  expoGoHint: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 72,
+    backgroundColor: Colors.overlayHeavy,
+    borderWidth: 1,
+    borderColor: Colors.glassBorder,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  expoGoHintText: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+  },
   headerOverlay: { position: 'absolute', left: 16 },
   headerCard: {
     flexDirection: 'row',
@@ -340,3 +513,16 @@ const styles = StyleSheet.create({
   },
   loadingText: { color: Colors.textSecondary, fontSize: 14, fontWeight: '600' },
 });
+
+const expoGoDarkMapStyle = [
+  { elementType: 'geometry', stylers: [{ color: '#111827' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#94A3B8' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0B1120' }] },
+  { featureType: 'administrative', elementType: 'geometry.stroke', stylers: [{ color: '#1E293B' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#1F2937' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#132A1D' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1F2937' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#0F172A' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#334155' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0C4A6E' }] },
+];

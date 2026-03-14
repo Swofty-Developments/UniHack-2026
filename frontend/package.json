@@ -7,6 +7,8 @@
     "dev": "expo run:android",
     "android": "expo start --tunnel --android",
     "ios": "expo start --tunnel --ios",
+    "android:native": "expo run:android",
+    "ios:native": "expo run:ios",
     "web": "expo start --web"
   },
   "dependencies": {
@@ -42,13 +44,13 @@
     "react-native-screens": "~4.16.0",
     "react-native-webview": "^13.16.1",
     "superjson": "^2.2.6",
-    "three": "0.160.0",
+    "three": "^0.166.1",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@prisma/client": "^7.5.0",
     "@types/react": "~19.1.10",
-    "@types/three": "0.160.0",
+    "@types/three": "^0.166.0",
     "typescript": "~5.9.2",
     "zod": "^4.3.6"
   },
