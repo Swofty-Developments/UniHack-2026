@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -12,6 +12,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
+import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -24,7 +25,7 @@ import { RadarPulse } from '../components/common/RadarPulse';
 import { useFadeIn, useScaleIn } from '../hooks/useAnimations';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
-type ScanStep = 'pick' | 'uploading';
+type ScanStep = 'pick' | 'uploading' | 'capturing' | 'analyzing';
 type BuildingType = 'public' | 'residential' | 'commercial' | 'educational' | 'medical' | 'transport';
 
 const BUILDING_TYPES: { key: BuildingType; label: string }[] = [
@@ -65,6 +66,8 @@ export default function ScanScreen() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [captureFilename, setCaptureFilename] = useState<string | null>(null);
+  const uploadDataRef = useRef<any>(null);
 
   const headerFade = useFadeIn(0);
   const contentFade = useFadeIn(150);
@@ -73,15 +76,22 @@ export default function ScanScreen() {
   const handlePickFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
+        type: 'application/octet-stream',
         copyToCacheDirectory: true,
       });
 
       if (result.canceled || !result.assets || result.assets.length === 0) return;
 
       const asset = result.assets[0];
-      const fileInfo = await FileSystem.getInfoAsync(asset.uri);
-      const fileSize = (fileInfo as any).size ?? 0;
+      let fileSize = asset.size ?? 0;
+      if (!fileSize) {
+        try {
+          const fileInfo = await FileSystem.getInfoAsync(asset.uri);
+          fileSize = (fileInfo as any).size ?? 0;
+        } catch {
+          // Size unavailable for some content URIs
+        }
+      }
 
       setPickedFile({
         name: asset.name,
@@ -89,7 +99,8 @@ export default function ScanScreen() {
         size: fileSize,
       });
       setErrorMessage(null);
-    } catch {
+    } catch (err: any) {
+      console.error('File pick failed:', err);
       setErrorMessage('Failed to pick file. Please try again.');
     }
   };
@@ -120,8 +131,9 @@ export default function ScanScreen() {
         // Use default coordinates
       }
 
-      setUploadProgress(0.2);
+      setUploadProgress(0.15);
 
+      // Step 1: Upload the file
       const formData = new FormData();
       formData.append('file', {
         uri: pickedFile.uri,
@@ -136,7 +148,7 @@ export default function ScanScreen() {
       formData.append('displayName', displayName ?? 'Anonymous');
       formData.append('selectedProfiles', JSON.stringify(selectedProfiles));
 
-      setUploadProgress(0.4);
+      setUploadProgress(0.3);
 
       const response = await fetch(`${API_URL}/api/upload-scan`, {
         method: 'POST',
@@ -146,13 +158,12 @@ export default function ScanScreen() {
         },
       });
 
-      setUploadProgress(0.8);
-
       if (!response.ok) {
         throw new Error(`Upload failed with status ${response.status}`);
       }
 
       const data = await response.json();
+      setUploadProgress(0.45);
 
       if (data.scanner && (!userId || userId === 'local-user')) {
         setUser({
@@ -163,20 +174,114 @@ export default function ScanScreen() {
         });
       }
 
-      setUploadResult({
-        territoryName: data.territory?.name ?? spaceName.trim(),
-        territoryId: data.territory?.id ?? '',
-        hazardCount: data.summary?.total ?? data.hazards?.length ?? 0,
-      });
+      // Store upload data for after panoramic capture
+      uploadDataRef.current = data;
 
-      setUploadProgress(1);
-      await queryClient.invalidateQueries();
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // Step 2: Start panoramic capture in hidden WebView
+      const modelFilename = data.territory?.modelUrl?.split('/').pop();
+      if (modelFilename) {
+        setCaptureFilename(modelFilename);
+        setStep('capturing');
+        // The WebView onMessage handler will continue the flow
+      } else {
+        // No model URL, finish with texture-based analysis
+        finishUpload(data);
+      }
     } catch {
       setErrorMessage('Upload failed. Check your connection and try again.');
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setStep('pick');
     }
+  };
+
+  const handleCaptureMessage = async (event: any) => {
+    try {
+      const msg = JSON.parse(event.nativeEvent.data);
+      if (msg.type === 'error') {
+        console.warn('[Capture] Error:', msg.message);
+        finishUpload(uploadDataRef.current);
+        return;
+      }
+      if (msg.type !== 'panoramic') return;
+
+      setStep('analyzing');
+      setUploadProgress(0.6);
+      console.log(`[Capture] Got ${msg.shots.length} panoramic views, sending to AI...`);
+
+      // Step 3: Send panoramic screenshots to Claude for analysis
+      const analysisRes = await fetch(`${API_URL}/api/analyze-panoramic`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          screenshots: msg.shots,
+          selectedProfiles,
+        }),
+      });
+
+      if (analysisRes.ok) {
+        const { hazards } = await analysisRes.json();
+        console.log(`[Capture] AI detected ${hazards.length} hazards with 3D positions`);
+        setUploadProgress(0.85);
+
+        // Step 4: Update the territory with panoramic hazards
+        const data = uploadDataRef.current;
+        if (data?.territory?.id) {
+          await fetch(`${API_URL}/api/update-territory-hazards`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              territoryId: data.territory.id,
+              hazards,
+            }),
+          });
+        }
+
+        const summary = {
+          total: hazards.length,
+          bySeverity: {
+            high: hazards.filter((h: any) => h.severity === 'high').length,
+            medium: hazards.filter((h: any) => h.severity === 'medium').length,
+            low: hazards.filter((h: any) => h.severity === 'low').length,
+          },
+        };
+
+        setUploadResult({
+          territoryName: data?.territory?.name ?? spaceName.trim(),
+          territoryId: data?.territory?.id ?? '',
+          hazardCount: hazards.length,
+        });
+        setStep('uploading');
+      } else {
+        // Panoramic analysis failed, use the original texture-based hazards
+        finishUpload(uploadDataRef.current);
+        return;
+      }
+
+      setUploadProgress(1);
+      setCaptureFilename(null);
+      await queryClient.invalidateQueries();
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err) {
+      console.error('[Capture] Analysis failed:', err);
+      finishUpload(uploadDataRef.current);
+    }
+  };
+
+  const finishUpload = async (data: any) => {
+    if (!data) {
+      setStep('pick');
+      return;
+    }
+    setUploadResult({
+      territoryName: data.territory?.name ?? spaceName.trim(),
+      territoryId: data.territory?.id ?? '',
+      hazardCount: data.summary?.total ?? data.hazards?.length ?? 0,
+    });
+    setStep('uploading');
+    setUploadProgress(1);
+    setCaptureFilename(null);
+    await queryClient.invalidateQueries();
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const handleViewTerritory = () => {
@@ -199,71 +304,90 @@ export default function ScanScreen() {
     setUploadProgress(0);
     setUploadResult(null);
     setErrorMessage(null);
+    setCaptureFilename(null);
+    uploadDataRef.current = null;
   };
 
-  if (step === 'uploading') {
+  if (step === 'capturing' || step === 'analyzing' || (step === 'uploading' && !uploadResult)) {
+    const statusText = step === 'capturing'
+      ? 'Scanning space from 8 angles...'
+      : step === 'analyzing'
+      ? 'AI is analyzing for accessibility hazards...'
+      : uploadProgress < 0.3
+      ? 'Uploading scan...'
+      : 'Processing...';
+
     return (
       <View style={styles.container}>
         <View style={styles.centeredContent}>
-          {uploadResult ? (
-            <>
-              <Animated.View style={[styles.resultSection, resultScale]}>
-                <View style={styles.successIcon}>
-                  <Ionicons name="checkmark-circle" size={56} color={Colors.hazardLow} />
-                </View>
-                <Text style={styles.resultTitle}>{uploadResult.territoryName}</Text>
-                <Text style={styles.resultSubtitle}>
-                  {uploadResult.hazardCount} accessibility hazard{uploadResult.hazardCount !== 1 ? 's' : ''} detected
-                </Text>
-              </Animated.View>
+          <RadarPulse size={100} color={Colors.primary}>
+            <Ionicons name="scan-outline" size={36} color={Colors.primary} />
+          </RadarPulse>
 
-              <View style={styles.resultActions}>
-                <TouchableOpacity
-                  style={styles.primaryButton}
-                  onPress={handleViewTerritory}
-                  activeOpacity={0.88}
-                  accessibilityRole="button"
-                  accessibilityLabel="View scanned territory"
-                >
-                  <Ionicons name="map-outline" size={18} color={Colors.background} />
-                  <Text style={styles.primaryButtonText}>View Territory</Text>
-                </TouchableOpacity>
+          <View style={styles.uploadingTextBlock}>
+            <Text style={styles.uploadingTitle}>{statusText}</Text>
+            <Text style={styles.uploadingSubtitle}>
+              {step === 'capturing'
+                ? 'Rendering panoramic views of your scan for precise hazard detection'
+                : step === 'analyzing'
+                ? 'Claude is identifying hazards and pinpointing their exact locations'
+                : 'Uploading your LiDAR scan for processing'}
+            </Text>
+            <Text style={styles.progressText}>{Math.round(uploadProgress * 100)}%</Text>
+          </View>
+        </View>
 
-                <TouchableOpacity
-                  style={styles.secondaryButton}
-                  onPress={handleBackToMap}
-                  activeOpacity={0.88}
-                  accessibilityRole="button"
-                  accessibilityLabel="Return to map"
-                >
-                  <Text style={styles.secondaryButtonText}>Back to Map</Text>
-                </TouchableOpacity>
-              </View>
-            </>
-          ) : (
-            <>
-              <RadarPulse size={100} color={Colors.primary}>
-                <Ionicons name="cloud-upload-outline" size={36} color={Colors.primary} />
-              </RadarPulse>
+        {/* Hidden WebView for panoramic capture */}
+        {captureFilename ? (
+          <WebView
+            style={{ width: 1, height: 1, position: 'absolute', opacity: 0 }}
+            source={{ uri: `${API_URL.replace('/api', '')}/api/capture/${captureFilename}` }}
+            onMessage={handleCaptureMessage}
+            javaScriptEnabled
+            domStorageEnabled
+            mixedContentMode="always"
+          />
+        ) : null}
+      </View>
+    );
+  }
 
-              <View style={styles.uploadingTextBlock}>
-                <Text style={styles.uploadingTitle}>
-                  {uploadProgress < 0.5 ? 'Uploading scan...' : 'Analyzing your LiDAR scan...'}
-                </Text>
-                <Text style={styles.uploadingSubtitle}>
-                  Analyzing your LiDAR scan for accessibility hazards...
-                </Text>
-                <Text style={styles.progressText}>{Math.round(uploadProgress * 100)}%</Text>
-              </View>
+  if (uploadResult) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.centeredContent}>
+          <Animated.View style={[styles.resultSection, resultScale]}>
+            <View style={styles.successIcon}>
+              <Ionicons name="checkmark-circle" size={56} color={Colors.hazardLow} />
+            </View>
+            <Text style={styles.resultTitle}>{uploadResult.territoryName}</Text>
+            <Text style={styles.resultSubtitle}>
+              {uploadResult.hazardCount} accessibility hazard{uploadResult.hazardCount !== 1 ? 's' : ''} detected
+            </Text>
+          </Animated.View>
 
-              {errorMessage ? (
-                <View style={styles.errorBanner}>
-                  <Ionicons name="alert-circle" size={16} color={Colors.hazardHigh} />
-                  <Text style={styles.errorText}>{errorMessage}</Text>
-                </View>
-              ) : null}
-            </>
-          )}
+          <View style={styles.resultActions}>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={handleViewTerritory}
+              activeOpacity={0.88}
+              accessibilityRole="button"
+              accessibilityLabel="View scanned territory"
+            >
+              <Ionicons name="map-outline" size={18} color={Colors.background} />
+              <Text style={styles.primaryButtonText}>View Territory</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={handleBackToMap}
+              activeOpacity={0.88}
+              accessibilityRole="button"
+              accessibilityLabel="Return to map"
+            >
+              <Text style={styles.secondaryButtonText}>Back to Map</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     );

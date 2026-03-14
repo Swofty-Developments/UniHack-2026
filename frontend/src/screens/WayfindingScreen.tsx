@@ -1,13 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, StyleSheet, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GLView, ExpoWebGLRenderingContext } from 'expo-gl';
-import { Renderer } from 'expo-three';
-import * as THREE from 'three';
-// @ts-ignore - three.js examples don't have perfect type defs in RN
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { trpc } from '../utils/trpc';
 import { useProfileStore } from '../stores/useProfileStore';
@@ -26,87 +22,13 @@ import {
 
 type WayfindingRoute = RouteProp<RootStackParamList, 'Wayfinding'>;
 
-const SEVERITY_COLORS: Record<string, number> = {
-  high: 0xef4444,
-  medium: 0xf59e0b,
-  low: 0x10b981,
+const BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:3001/api').replace(/\/api$/, '');
+
+const SEVERITY_COLORS_CSS: Record<string, string> = {
+  high: '#ef4444',
+  medium: '#f59e0b',
+  low: '#10b981',
 };
-
-function createHazardPin(
-  position: { x: number; y: number; z: number },
-  severity: string
-) {
-  const group = new THREE.Group();
-  const color = SEVERITY_COLORS[severity] ?? 0xf59e0b;
-
-  const coneMat = new THREE.MeshStandardMaterial({
-    color,
-    emissive: color,
-    emissiveIntensity: 0.3,
-  });
-  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.4, 8), coneMat);
-  cone.position.y = 0.5;
-  group.add(cone);
-
-  const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), coneMat);
-  sphere.position.y = 0.8;
-  group.add(sphere);
-
-  const ringMat = new THREE.MeshBasicMaterial({
-    color,
-    transparent: true,
-    opacity: 0.4,
-    side: THREE.DoubleSide,
-  });
-  const ring = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.35, 32), ringMat);
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.05;
-  group.add(ring);
-
-  group.position.set(position.x, position.y, position.z);
-  return group;
-}
-
-function createDemoRoom() {
-  const group = new THREE.Group();
-  const wallMat = new THREE.MeshStandardMaterial({
-    color: 0x334155,
-    roughness: 0.7,
-    side: THREE.DoubleSide,
-  });
-
-  const wallGeo = new THREE.BoxGeometry(8, 3, 0.1);
-  const backWall = new THREE.Mesh(wallGeo, wallMat);
-  backWall.position.set(0, 1.5, -4);
-  group.add(backWall);
-
-  const leftWall = new THREE.Mesh(wallGeo, wallMat);
-  leftWall.rotation.y = Math.PI / 2;
-  leftWall.position.set(-4, 1.5, 0);
-  group.add(leftWall);
-
-  const rightWall = new THREE.Mesh(wallGeo, wallMat);
-  rightWall.rotation.y = Math.PI / 2;
-  rightWall.position.set(4, 1.5, 0);
-  group.add(rightWall);
-
-  const doorFrame = new THREE.Mesh(
-    new THREE.BoxGeometry(1.2, 2.4, 0.15),
-    new THREE.MeshStandardMaterial({ color: 0x1e293b })
-  );
-  doorFrame.position.set(0, 1.2, 4);
-  group.add(doorFrame);
-
-  const stairMat = new THREE.MeshStandardMaterial({ color: 0x475569 });
-  for (let i = 0; i < 5; i++) {
-    const step = new THREE.Mesh(new THREE.BoxGeometry(2, 0.2, 0.4), stairMat);
-    step.position.set(-2.5, 0.1 + i * 0.2, -2 + i * 0.4);
-    step.castShadow = true;
-    group.add(step);
-  }
-
-  return group;
-}
 
 export default function WayfindingScreen() {
   const route = useRoute<WayfindingRoute>();
@@ -140,167 +62,23 @@ export default function WayfindingScreen() {
     [hazards, selectedProfiles]
   );
 
-  const sceneRef = useRef<{
-    scene: THREE.Scene;
-    hazardGroup: THREE.Group;
-    routeMesh: THREE.Mesh | null;
-  } | null>(null);
-
-  useEffect(() => {
-    const ctx = sceneRef.current;
-    if (!ctx) return;
-
-    while (ctx.hazardGroup.children.length > 0) {
-      ctx.hazardGroup.remove(ctx.hazardGroup.children[0]);
-    }
-
-    filteredHazards.forEach((h: Hazard) => {
-      if (h.position3D) {
-        const pin = createHazardPin(h.position3D, h.severity);
-        ctx.hazardGroup.add(pin);
-      }
-    });
-
-    if (ctx.routeMesh) {
-      ctx.scene.remove(ctx.routeMesh);
-      ctx.routeMesh = null;
-    }
-
-    const viewerRoute = buildAccessibleRoute(hazards as Hazard[], selectedProfiles);
-    if (viewerRoute.points.length >= 2) {
-      const curve = new THREE.CatmullRomCurve3(
-        viewerRoute.points.map((p) => new THREE.Vector3(p.x, p.y, p.z))
-      );
-      const tubeGeo = new THREE.TubeGeometry(curve, 64, 0.05, 8, false);
-      const tubeMat = new THREE.MeshStandardMaterial({
-        color: viewerRoute.color,
-        emissive: viewerRoute.color,
-        emissiveIntensity: 0.5,
-        transparent: true,
-        opacity: 0.8,
-      });
-      ctx.routeMesh = new THREE.Mesh(tubeGeo, tubeMat);
-      ctx.scene.add(ctx.routeMesh);
-    }
-  }, [filteredHazards, hazards, selectedProfiles]);
-
-  const onContextCreate = useCallback((gl: ExpoWebGLRenderingContext) => {
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0f172a);
-    scene.fog = new THREE.Fog(0x0f172a, 15, 30);
-
-    const camera = new THREE.PerspectiveCamera(
-      60,
-      gl.drawingBufferWidth / gl.drawingBufferHeight,
-      0.1,
-      100
-    );
-    camera.position.set(5, 4, 5);
-    camera.lookAt(0, 0, 0);
-
-    const renderer = new Renderer({ gl });
-    renderer.setSize(gl.drawingBufferWidth, gl.drawingBufferHeight);
-    renderer.shadowMap.enabled = true;
-
-    // Lighting
-    scene.add(new THREE.AmbientLight(0x404060, 0.8));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
-    dirLight.position.set(5, 10, 7);
-    dirLight.castShadow = true;
-    scene.add(dirLight);
-    const fillLight = new THREE.DirectionalLight(0x4488ff, 0.4);
-    fillLight.position.set(-5, 3, -5);
-    scene.add(fillLight);
-
-    // Grid + floor
-    scene.add(new THREE.GridHelper(20, 40, 0x1e293b, 0x1e293b));
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(20, 20),
-      new THREE.MeshStandardMaterial({ color: 0x151b2e, roughness: 0.9 })
-    );
-    floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = true;
-    scene.add(floor);
-
-    // Try to load GLB model, fall back to demo room
-    const modelUrl = selectedTerritory?.modelUrl;
-    let modelLoaded = false;
-
-    if (modelUrl) {
-      try {
-        const loader = new GLTFLoader();
-        loader.load(
-          modelUrl,
-          (gltf: any) => {
-            scene.add(gltf.scene);
-            modelLoaded = true;
-          },
-          undefined,
-          () => {
-            // Load failed, add demo room
-            if (!modelLoaded) {
-              scene.add(createDemoRoom());
-            }
-          }
-        );
-      } catch {
-        scene.add(createDemoRoom());
-      }
-    } else {
-      scene.add(createDemoRoom());
-    }
-
-    // Hazard group
-    const hazardGroup = new THREE.Group();
-    scene.add(hazardGroup);
-
-    // Default route
-    const defaultCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0, 0.1, 4),
-      new THREE.Vector3(0, 0.1, 2),
-      new THREE.Vector3(1, 0.1, 0),
-      new THREE.Vector3(1, 0.1, -2),
-      new THREE.Vector3(0, 0.1, -3),
-    ]);
-    const routeMat = new THREE.MeshStandardMaterial({
-      color: 0x2563eb,
-      emissive: 0x2563eb,
-      emissiveIntensity: 0.5,
-      transparent: true,
-      opacity: 0.8,
-    });
-    const routeMesh = new THREE.Mesh(
-      new THREE.TubeGeometry(defaultCurve, 64, 0.05, 8, false),
-      routeMat
-    );
-    scene.add(routeMesh);
-
-    sceneRef.current = { scene, hazardGroup, routeMesh };
-
-    // Orbit animation
-    const clock = new THREE.Clock();
-    const animate = () => {
-      requestAnimationFrame(animate);
-      const t = clock.getElapsedTime();
-
-      camera.position.x = 6 * Math.cos(t * 0.15);
-      camera.position.z = 6 * Math.sin(t * 0.15);
-      camera.position.y = 3.5 + Math.sin(t * 0.1) * 0.5;
-      camera.lookAt(0, 0.5, 0);
-
-      hazardGroup.children.forEach((pin, i) => {
-        pin.children.forEach((child: any) => {
-          if (child.geometry?.type === 'SphereGeometry') {
-            child.position.y = 0.8 + Math.sin(t * 2 + i) * 0.05;
-          }
-        });
-      });
-
-      renderer.render(scene, camera);
-      gl.endFrameEXP();
-    };
-    animate();
-  }, [selectedTerritory?.modelUrl]);
+  const viewerUrl = useMemo(() => {
+    if (!selectedTerritory?.modelUrl) return null;
+    const filename = selectedTerritory.modelUrl.split('/').pop() || '';
+    const hazardPins = filteredHazards
+      .filter((h: Hazard) => h.position3D)
+      .map((h: Hazard) => ({
+        x: h.position3D!.x,
+        z: h.position3D!.z,
+        color: SEVERITY_COLORS_CSS[h.severity] ?? '#f59e0b',
+        type: h.type,
+        severity: h.severity,
+        description: h.description,
+      }));
+    const hazardsParam = encodeURIComponent(JSON.stringify(hazardPins));
+    const panelHeight = 180 + Math.max(insets.bottom, 16);
+    return `${BASE_URL}/api/viewer/${filename}?hazards=${hazardsParam}&panelHeight=${panelHeight}`;
+  }, [selectedTerritory?.modelUrl, filteredHazards, insets.bottom]);
 
   const handleProfileToggle = async (profileId: AccessibilityProfileId) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -309,9 +87,7 @@ export default function WayfindingScreen() {
     if (userId) {
       try {
         await trpcClient.user.updateProfile.mutate({ selectedProfiles: nextProfiles });
-      } catch {
-        // Keep local profile selection even if remote sync fails.
-      }
+      } catch {}
     }
   };
 
@@ -329,8 +105,32 @@ export default function WayfindingScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Main 3D area */}
-      <GLView style={styles.glView} onContextCreate={onContextCreate} />
+      {viewerUrl ? (
+        <WebView
+          style={styles.webview}
+          source={{ uri: viewerUrl }}
+          originWhitelist={['*']}
+          allowsInlineMediaPlayback
+          javaScriptEnabled
+          domStorageEnabled
+          mixedContentMode="always"
+          onMessage={(event) => {
+            try {
+              const msg = JSON.parse(event.nativeEvent.data);
+              if (msg.type === 'debug') {
+                console.log('[Viewer] Model bounds:', msg.bounds);
+                console.log('[Viewer] Pin coords:', JSON.stringify(msg.pinCoords));
+                console.log('[Viewer] Pins placed:', msg.pinCount);
+              }
+            } catch {}
+          }}
+        />
+      ) : (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Loading wayfinding...</Text>
+        </View>
+      )}
 
       {/* Top bar */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
@@ -407,11 +207,6 @@ export default function WayfindingScreen() {
                 </Text>
               </View>
             ))}
-            {highSeverityHazards.length > 3 ? (
-              <Text style={styles.moreText}>
-                +{highSeverityHazards.length - 3} more concern{highSeverityHazards.length - 3 !== 1 ? 's' : ''}
-              </Text>
-            ) : null}
           </View>
         ) : (
           <View style={styles.concernsSection}>
@@ -426,9 +221,10 @@ export default function WayfindingScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  glView: { flex: 1 },
+  webview: { flex: 1 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
+  loadingText: { color: Colors.textSecondary, fontSize: 14 },
 
-  // Top bar
   topBar: {
     position: 'absolute',
     top: 0,
@@ -455,15 +251,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.glassBorder,
   },
-  topBarTitle: {
-    color: Colors.text,
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  profileChipsRow: {
-    gap: 8,
-    paddingRight: 8,
-  },
+  topBarTitle: { color: Colors.text, fontSize: 17, fontWeight: '800' },
+  profileChipsRow: { gap: 8, paddingRight: 8 },
   profileChipSmall: {
     backgroundColor: 'rgba(30, 41, 59, 0.92)',
     borderRadius: 12,
@@ -471,12 +260,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderWidth: 1,
   },
-  profileChipSmallText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
+  profileChipSmallText: { fontSize: 11, fontWeight: '700' },
 
-  // Bottom panel
   bottomPanel: {
     position: 'absolute',
     bottom: 0,
@@ -490,7 +275,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.glassBorder,
     paddingHorizontal: 20,
     paddingTop: 18,
-    minHeight: 200,
+    minHeight: 180,
   },
   bottomPanelHeader: {
     flexDirection: 'row',
@@ -508,11 +293,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  hazardBadgeText: {
-    color: Colors.hazardHigh,
-    fontSize: 12,
-    fontWeight: '700',
-  },
+  hazardBadgeText: { color: Colors.hazardHigh, fontSize: 12, fontWeight: '700' },
   riskIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -522,15 +303,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderWidth: 1,
   },
-  riskDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  riskText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
+  riskDot: { width: 8, height: 8, borderRadius: 4 },
+  riskText: { fontSize: 12, fontWeight: '700' },
   profileSummaryText: {
     color: Colors.textSecondary,
     fontSize: 12,
@@ -538,11 +312,7 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'right',
   },
-
-  // Concerns
-  concernsSection: {
-    gap: 8,
-  },
+  concernsSection: { gap: 8 },
   concernsTitle: {
     color: Colors.textMuted,
     fontSize: 11,
@@ -560,26 +330,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  severityDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  concernText: {
-    flex: 1,
-    color: Colors.text,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  moreText: {
-    color: Colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-    paddingLeft: 4,
-  },
-  noConcernsText: {
-    color: Colors.hazardLow,
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  severityDot: { width: 8, height: 8, borderRadius: 4 },
+  concernText: { flex: 1, color: Colors.text, fontSize: 13, fontWeight: '600' },
+  noConcernsText: { color: Colors.hazardLow, fontSize: 13, fontWeight: '600' },
 });

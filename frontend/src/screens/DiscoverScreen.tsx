@@ -180,7 +180,9 @@ export default function DiscoverScreen() {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statNumberInfo}>{formatArea(totalArea)}</Text>
+              <Text style={styles.statNumberInfo}>
+                {formatArea(totalArea).replace(/\s*(sqm|km²|m²)/, '')}<Text style={styles.statUnit}> {formatArea(totalArea).match(/sqm|km²|m²/)?.[0] ?? 'sqm'}</Text>
+              </Text>
               <Text style={styles.statCaption}>Mapped</Text>
             </View>
           </View>
@@ -243,10 +245,11 @@ const styles = StyleSheet.create({
     borderColor: Colors.glassBorder,
     alignItems: 'center',
   },
-  statItem: { flex: 1, alignItems: 'center' },
+  statItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   statNumber: { color: Colors.primary, fontSize: 30, fontWeight: '800' },
   statNumberAccent: { color: Colors.accent, fontSize: 30, fontWeight: '800' },
-  statNumberInfo: { color: Colors.info, fontSize: 30, fontWeight: '800' },
+  statNumberInfo: { color: Colors.info, fontSize: 30, fontWeight: '800', textAlign: 'center' },
+  statUnit: { fontSize: 14, fontWeight: '600', color: Colors.textMuted },
   statCaption: { color: Colors.textMuted, fontSize: 10, marginTop: 6, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   statDivider: { width: 1, height: 32, backgroundColor: Colors.border },
   listLabel: {
