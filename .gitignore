@@ -30,5 +30,8 @@ npm-debug.log*
 
 .claude
 
+# Uploads
+backend/uploads/
+
 # Docker
 docker-compose.override.yml

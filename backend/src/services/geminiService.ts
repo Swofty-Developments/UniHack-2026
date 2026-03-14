@@ -1,8 +1,12 @@
-﻿import { geminiModel } from '../config/gemini';
+import Anthropic from '@anthropic-ai/sdk';
 import { Hazard, HazardType, HazardSeverity, AccessibilityProfileId } from '../types/hazard';
 import { ScanImageSource } from '../types/scan';
 
-const ANALYSIS_PROMPT = `Analyze this image of an indoor space for accessibility hazards.
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY || '',
+});
+
+const ANALYSIS_PROMPT = `Analyze these images of an indoor space for accessibility hazards.
 Identify all potential barriers for people with disabilities.
 
 Return a JSON array of hazards, where each hazard has:
@@ -15,15 +19,17 @@ Return a JSON array of hazards, where each hazard has:
 
 Return ONLY valid JSON array, no other text or markdown.`;
 
-const LOCATION_TO_3D: Record<string, { x: number; y: number; z: number }> = {
-  left: { x: -3, y: 1, z: 0 },
-  center: { x: 0, y: 1, z: 0 },
-  right: { x: 3, y: 1, z: 0 },
-  foreground: { x: 0, y: 0.5, z: 3 },
-  background: { x: 0, y: 1.5, z: -3 },
+// Approximate location hints mapped to normalized positions (0-1 range)
+// These get scaled to the actual model bounds in the 3D viewer
+const LOCATION_TO_NORMALIZED: Record<string, { nx: number; nz: number }> = {
+  left: { nx: 0.2, nz: 0.5 },
+  center: { nx: 0.5, nz: 0.5 },
+  right: { nx: 0.8, nz: 0.5 },
+  foreground: { nx: 0.5, nz: 0.8 },
+  background: { nx: 0.5, nz: 0.2 },
 };
 
-interface GeminiHazardResult {
+interface AnalysisHazardResult {
   type: HazardType;
   severity: HazardSeverity;
   description: string;
@@ -44,22 +50,23 @@ function extractBase64Payload(base64: string, mimeType?: string) {
       data: dataUriMatch[2],
     };
   }
-
   return {
     mimeType: mimeType || 'image/jpeg',
     data: base64,
   };
 }
 
-async function toInlineDataPart(image: string | ScanImageSource) {
+async function toClaudeImageBlock(image: string | ScanImageSource): Promise<Anthropic.ImageBlockParam> {
   const source = normalizeImageSource(image);
 
   if (source.base64) {
     const payload = extractBase64Payload(source.base64, source.mimeType);
     return {
-      inlineData: {
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: payload.mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
         data: payload.data,
-        mimeType: payload.mimeType,
       },
     };
   }
@@ -69,9 +76,11 @@ async function toInlineDataPart(image: string | ScanImageSource) {
     const buffer = await response.arrayBuffer();
     const mimeType = response.headers.get('content-type') || source.mimeType || 'image/jpeg';
     return {
-      inlineData: {
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
         data: Buffer.from(buffer).toString('base64'),
-        mimeType,
       },
     };
   }
@@ -98,29 +107,62 @@ export async function analyzeImages(images: Array<string | ScanImageSource>): Pr
     });
 
     if (usableImages.length === 0) {
+      console.warn('No usable images for analysis, using fallback hazards');
       return getFallbackHazards();
     }
 
-    const imageParts = await Promise.all(usableImages.map((image) => toInlineDataPart(image)));
-    const result = await geminiModel.generateContent([ANALYSIS_PROMPT, ...imageParts]);
-    const responseText = result.response.text();
+    console.log(`[Claude] Analyzing ${usableImages.length} images...`);
+
+    const imageBlocks = await Promise.all(usableImages.map((image) => toClaudeImageBlock(image)));
+
+    const content: Anthropic.ContentBlockParam[] = [
+      ...imageBlocks,
+      { type: 'text', text: ANALYSIS_PROMPT },
+    ];
+
+    const result = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4096,
+      messages: [{ role: 'user', content }],
+    });
+
+    const responseText = result.content
+      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+      .map((block) => block.text)
+      .join('');
+
+    console.log('[Claude] Response received, parsing...');
 
     const cleaned = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const parsed: GeminiHazardResult[] = JSON.parse(cleaned);
+    const parsed: AnalysisHazardResult[] = JSON.parse(cleaned);
 
-    return parsed.map((hazard, index) => ({
-      type: hazard.type,
-      severity: hazard.severity,
-      description: hazard.description,
-      affectsProfiles: hazard.affectsProfiles,
-      position3D: LOCATION_TO_3D[hazard.approximateLocation] || { x: index * 2 - 2, y: 1, z: 0 },
-      position2D: { latitude: 0, longitude: 0 },
-      confidence: hazard.confidence,
-      detectedBy: 'ai' as const,
-      createdAt: new Date().toISOString(),
-    }));
+    console.log(`[Claude] Detected ${parsed.length} hazards`);
+
+    return parsed.map((hazard, index) => {
+      // Use normalized positions (0-1) that will be mapped to model bounds in the viewer
+      const base = LOCATION_TO_NORMALIZED[hazard.approximateLocation] || { nx: 0.5, nz: 0.5 };
+      // Spread hazards apart so they don't stack on top of each other
+      const jitterX = (index % 3 - 1) * 0.15;
+      const jitterZ = (Math.floor(index / 3) % 3 - 1) * 0.15;
+      return {
+        type: hazard.type,
+        severity: hazard.severity,
+        description: hazard.description,
+        affectsProfiles: hazard.affectsProfiles,
+        // Store normalized coordinates - the 3D viewer maps these to actual model bounds
+        position3D: {
+          x: Math.max(0.05, Math.min(0.95, base.nx + jitterX)),
+          y: 0,
+          z: Math.max(0.05, Math.min(0.95, base.nz + jitterZ)),
+        },
+        position2D: { latitude: 0, longitude: 0 },
+        confidence: hazard.confidence,
+        detectedBy: 'ai' as const,
+        createdAt: new Date().toISOString(),
+      };
+    });
   } catch (error) {
-    console.error('Gemini analysis failed:', error);
+    console.error('Claude analysis failed:', error);
     return getFallbackHazards();
   }
 }
@@ -136,7 +178,7 @@ function getFallbackHazards(): Omit<Hazard, 'id'>[] {
       severity: 'high',
       description: 'Staircase detected without adjacent ramp access',
       affectsProfiles: ['wheelchair', 'limited_mobility', 'elderly', 'parents_with_prams'],
-      position3D: { x: -2, y: 1, z: 0 },
+      position3D: { x: 0.25, y: 0, z: 0.5 },
       position2D: { latitude: 0, longitude: 0 },
       confidence: 0.92,
       detectedBy: 'ai',
@@ -147,7 +189,7 @@ function getFallbackHazards(): Omit<Hazard, 'id'>[] {
       severity: 'medium',
       description: 'Doorway width appears below 850mm wheelchair clearance',
       affectsProfiles: ['wheelchair', 'parents_with_prams'],
-      position3D: { x: 2, y: 1, z: 0 },
+      position3D: { x: 0.75, y: 0, z: 0.5 },
       position2D: { latitude: 0, longitude: 0 },
       confidence: 0.78,
       detectedBy: 'ai',
@@ -158,7 +200,7 @@ function getFallbackHazards(): Omit<Hazard, 'id'>[] {
       severity: 'low',
       description: 'Corridor section with insufficient lighting for low-vision navigation',
       affectsProfiles: ['low_vision', 'elderly'],
-      position3D: { x: 0, y: 2, z: -2 },
+      position3D: { x: 0.5, y: 0, z: 0.3 },
       position2D: { latitude: 0, longitude: 0 },
       confidence: 0.65,
       detectedBy: 'ai',

@@ -270,3 +270,71 @@ function detectMimeType(bytes: Buffer): string | null {
 
   return null;
 }
+
+// ── GLB → glTF conversion (for React Native compatibility) ──────────
+
+/**
+ * Converts a GLB file into a glTF JSON object where embedded images
+ * are replaced with URL references. This allows Three.js GLTFLoader
+ * in React Native to load textures via HTTP instead of Blob creation.
+ */
+export function convertGLBtoGLTF(filePath: string, textureBaseUrl: string): object {
+  const buffer = fs.readFileSync(filePath);
+
+  if (buffer.length < 12 || buffer.readUInt32LE(0) !== GLB_MAGIC) {
+    throw new Error('Not a valid GLB file');
+  }
+
+  let jsonChunkData: Buffer | null = null;
+  let binChunkData: Buffer | null = null;
+  let offset = 12;
+
+  while (offset < buffer.length) {
+    if (offset + 8 > buffer.length) break;
+    const chunkLength = buffer.readUInt32LE(offset);
+    const chunkType = buffer.readUInt32LE(offset + 4);
+    const chunkDataStart = offset + 8;
+    if (chunkDataStart + chunkLength > buffer.length) break;
+
+    const chunkData = buffer.subarray(chunkDataStart, chunkDataStart + chunkLength);
+    if (chunkType === CHUNK_TYPE_JSON) jsonChunkData = chunkData;
+    else if (chunkType === CHUNK_TYPE_BIN) binChunkData = chunkData;
+    offset = chunkDataStart + chunkLength;
+  }
+
+  if (!jsonChunkData) throw new Error('GLB missing JSON chunk');
+
+  const gltf = JSON.parse(jsonChunkData.toString('utf-8'));
+
+  // Replace embedded image bufferView references with base64 data URIs
+  // This avoids the Blob creation issue in React Native entirely
+  if (gltf.images && gltf.bufferViews && binChunkData) {
+    for (let i = 0; i < gltf.images.length; i++) {
+      const img = gltf.images[i];
+      if (img.bufferView === undefined) continue;
+
+      const bv = gltf.bufferViews[img.bufferView];
+      if (!bv) continue;
+
+      const byteOffset = bv.byteOffset ?? 0;
+      const byteLength = bv.byteLength;
+      if (byteOffset + byteLength > binChunkData.length) continue;
+
+      const imageBytes = binChunkData.subarray(byteOffset, byteOffset + byteLength);
+      const mime = img.mimeType || detectMimeType(imageBytes) || 'image/jpeg';
+
+      // Embed as data URI so no Blob/URL creation is needed client-side
+      img.uri = `data:${mime};base64,${imageBytes.toString('base64')}`;
+      delete img.bufferView;
+      delete img.mimeType;
+    }
+  }
+
+  // Convert BIN chunk to a base64 data URI buffer (for mesh geometry)
+  if (binChunkData && gltf.buffers && gltf.buffers.length > 0) {
+    gltf.buffers[0].uri = `data:application/octet-stream;base64,${binChunkData.toString('base64')}`;
+    gltf.buffers[0].byteLength = binChunkData.length;
+  }
+
+  return gltf;
+}
