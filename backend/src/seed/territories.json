@@ -1,171 +1,171 @@
 [
   {
-    "name": "Learning and Teaching Building - South Entry",
-    "description": "Primary south-side approach to the Learning and Teaching Building at Monash Clayton.",
-    "buildingType": "university",
-    "areaSqMeters": 640,
+    "name": "Learning and Teaching Building (LTB)",
+    "description": "Entire Learning and Teaching Building footprint at Monash Clayton.",
+    "buildingType": "academic",
+    "areaSqMeters": 4100,
     "polygon": {
       "coordinates": [
-        { "latitude": -37.9131, "longitude": 145.1330 },
-        { "latitude": -37.9131, "longitude": 145.1343 },
-        { "latitude": -37.9122, "longitude": 145.1343 },
-        { "latitude": -37.9122, "longitude": 145.1330 }
+        { "latitude": -37.914104, "longitude": 145.132157 },
+        { "latitude": -37.914104, "longitude": 145.133043 },
+        { "latitude": -37.913636, "longitude": 145.133043 },
+        { "latitude": -37.913636, "longitude": 145.132157 }
       ]
     },
-    "center": { "latitude": -37.91265, "longitude": 145.13365 },
-    "fillColor": "rgba(37, 99, 235, 0.3)",
+    "center": { "latitude": -37.91387, "longitude": 145.13260 },
+    "fillColor": "rgba(37, 99, 235, 0.28)",
     "hazards": [
       {
         "type": "stairs",
-        "severity": "high",
-        "description": "Main threshold relies on a short stair run with no nearby ramp line.",
+        "severity": "medium",
+        "description": "Some approaches still funnel people toward stepped entries before the step-free route becomes obvious.",
         "affectsProfiles": ["wheelchair", "limited_mobility", "elderly", "parents_with_prams"],
-        "position3D": { "x": -2, "y": 0, "z": 1 },
-        "confidence": 0.93
+        "position3D": { "x": -1.2, "y": 0.3, "z": 1.0 },
+        "confidence": 0.82
       },
       {
         "type": "confusing_wayfinding",
         "severity": "medium",
-        "description": "Signage splits between multiple wings and lifts without a clear accessible route marker.",
+        "description": "The building has multiple entries and teaching zones, which can make the accessible path less obvious on first arrival.",
         "affectsProfiles": ["neurodivergent", "low_vision", "elderly"],
-        "position3D": { "x": 1, "y": 2, "z": -1 },
-        "confidence": 0.78
+        "position3D": { "x": 1.0, "y": 1.6, "z": -0.4 },
+        "confidence": 0.74
       }
     ]
   },
   {
-    "name": "Campus Centre - Main Arcade",
-    "description": "Busy circulation spine linking food, retail, and services in the heart of campus.",
-    "buildingType": "shopping",
-    "areaSqMeters": 780,
+    "name": "GYG",
+    "description": "Guzman y Gomez tenancy within the Campus Centre at Monash Clayton.",
+    "buildingType": "food_and_beverage",
+    "areaSqMeters": 135,
     "polygon": {
       "coordinates": [
-        { "latitude": -37.9121, "longitude": 145.1342 },
-        { "latitude": -37.9121, "longitude": 145.1361 },
-        { "latitude": -37.9112, "longitude": 145.1361 },
-        { "latitude": -37.9112, "longitude": 145.1342 }
+        { "latitude": -37.911857, "longitude": 145.132880 },
+        { "latitude": -37.911857, "longitude": 145.133050 },
+        { "latitude": -37.911775, "longitude": 145.133050 },
+        { "latitude": -37.911775, "longitude": 145.132880 }
       ]
     },
-    "center": { "latitude": -37.91165, "longitude": 145.13515 },
-    "fillColor": "rgba(16, 185, 129, 0.3)",
+    "center": { "latitude": -37.911816, "longitude": 145.132965 },
+    "fillColor": "rgba(16, 185, 129, 0.28)",
     "hazards": [
       {
-        "type": "slippery_surface",
+        "type": "crowding",
         "severity": "medium",
-        "description": "Polished arcade tiles become slick during lunch traffic and rainy weather.",
-        "affectsProfiles": ["elderly", "limited_mobility", "parents_with_prams"],
-        "position3D": { "x": 0, "y": 0, "z": 0 },
-        "confidence": 0.81
+        "description": "Queueing at meal times can compress circulation space around the counter and nearby seating edge.",
+        "affectsProfiles": ["wheelchair", "low_vision", "neurodivergent"],
+        "position3D": { "x": 0.9, "y": 0.2, "z": -0.6 },
+        "confidence": 0.79
       },
       {
-        "type": "crowding",
+        "type": "slippery_surface",
         "severity": "low",
-        "description": "Peak-hour queuing narrows the clear path through the central arcade.",
-        "affectsProfiles": ["wheelchair", "low_vision", "neurodivergent"],
-        "position3D": { "x": 2, "y": 1, "z": -2 },
-        "confidence": 0.69
+        "description": "Food-service floors can become slick during peak periods or cleaning cycles.",
+        "affectsProfiles": ["elderly", "limited_mobility", "parents_with_prams"],
+        "position3D": { "x": -0.4, "y": 0.0, "z": 0.0 },
+        "confidence": 0.68
+      }
+    ]
+  },
+  {
+    "name": "Monash Merchant (Sports Walk)",
+    "description": "Monash Merchant supermarket tenancy at 28 Sports Walk.",
+    "buildingType": "retail",
+    "areaSqMeters": 220,
+    "polygon": {
+      "coordinates": [
+        { "latitude": -37.911940, "longitude": 145.135856 },
+        { "latitude": -37.911940, "longitude": 145.136084 },
+        { "latitude": -37.911840, "longitude": 145.136084 },
+        { "latitude": -37.911840, "longitude": 145.135856 }
+      ]
+    },
+    "center": { "latitude": -37.91189, "longitude": 145.13597 },
+    "fillColor": "rgba(245, 158, 11, 0.28)",
+    "hazards": [
+      {
+        "type": "narrow_aisles",
+        "severity": "medium",
+        "description": "Merchandise displays and basket traffic can tighten the clear aisle width in busier periods.",
+        "affectsProfiles": ["wheelchair", "parents_with_prams", "low_vision"],
+        "position3D": { "x": 0.6, "y": 0.0, "z": 0.2 },
+        "confidence": 0.77
+      },
+      {
+        "type": "queueing",
+        "severity": "low",
+        "description": "Checkout queues may spill toward the entry zone during lunch and late afternoon peaks.",
+        "affectsProfiles": ["limited_mobility", "elderly", "neurodivergent"],
+        "position3D": { "x": -0.7, "y": 0.1, "z": -0.3 },
+        "confidence": 0.71
       }
     ]
   },
   {
     "name": "Matheson Library - Ground Floor",
-    "description": "Main library entry sequence, service desk, and first-floor vertical circulation zone.",
-    "buildingType": "university",
-    "areaSqMeters": 520,
+    "description": "Ground-floor entry, service, and circulation zone of Sir Louis Matheson Library.",
+    "buildingType": "library",
+    "areaSqMeters": 2100,
     "polygon": {
       "coordinates": [
-        { "latitude": -37.9110, "longitude": 145.1321 },
-        { "latitude": -37.9110, "longitude": 145.1333 },
-        { "latitude": -37.9102, "longitude": 145.1333 },
-        { "latitude": -37.9102, "longitude": 145.1321 }
+        { "latitude": -37.913148, "longitude": 145.134059 },
+        { "latitude": -37.913148, "longitude": 145.134741 },
+        { "latitude": -37.912832, "longitude": 145.134741 },
+        { "latitude": -37.912832, "longitude": 145.134059 }
       ]
     },
-    "center": { "latitude": -37.9106, "longitude": 145.1327 },
-    "fillColor": "rgba(139, 92, 246, 0.3)",
+    "center": { "latitude": -37.91299, "longitude": 145.13440 },
+    "fillColor": "rgba(139, 92, 246, 0.28)",
     "hazards": [
       {
         "type": "heavy_door",
         "severity": "medium",
-        "description": "Manual entrance doors require high opening force outside staffed hours.",
+        "description": "Manual door use can be awkward when entry assistance is not active or when users are carrying bags.",
         "affectsProfiles": ["wheelchair", "limited_mobility", "elderly"],
-        "position3D": { "x": -1, "y": 1, "z": 2 },
-        "confidence": 0.87
+        "position3D": { "x": -0.8, "y": 0.8, "z": 1.4 },
+        "confidence": 0.81
       },
       {
-        "type": "poor_lighting",
+        "type": "glare",
         "severity": "low",
-        "description": "Transition corridor toward the lift lobby has uneven lighting and glare.",
+        "description": "Changing light conditions near the glazed entry can reduce visual comfort on approach to internal circulation points.",
         "affectsProfiles": ["low_vision", "elderly"],
-        "position3D": { "x": 2, "y": 2, "z": -1 },
-        "confidence": 0.72
+        "position3D": { "x": 1.2, "y": 1.1, "z": -0.5 },
+        "confidence": 0.67
       }
     ]
   },
   {
-    "name": "Chancellery Loop - Student Services",
-    "description": "Administrative frontage and student service counters facing the main arrival loop.",
-    "buildingType": "office",
-    "areaSqMeters": 410,
+    "name": "Monash Sports Arcade room",
+    "description": "The Arcade recreation room inside Monash Sport, Clayton campus.",
+    "buildingType": "recreation",
+    "areaSqMeters": 320,
     "polygon": {
       "coordinates": [
-        { "latitude": -37.9104, "longitude": 145.1351 },
-        { "latitude": -37.9104, "longitude": 145.1364 },
-        { "latitude": -37.9095, "longitude": 145.1364 },
-        { "latitude": -37.9095, "longitude": 145.1351 }
+        { "latitude": -37.912812, "longitude": 145.136346 },
+        { "latitude": -37.912812, "longitude": 145.136574 },
+        { "latitude": -37.912668, "longitude": 145.136574 },
+        { "latitude": -37.912668, "longitude": 145.136346 }
       ]
     },
-    "center": { "latitude": -37.90995, "longitude": 145.13575 },
-    "fillColor": "rgba(245, 158, 11, 0.3)",
+    "center": { "latitude": -37.91274, "longitude": 145.13646 },
+    "fillColor": "rgba(236, 72, 153, 0.28)",
     "hazards": [
       {
-        "type": "no_seating",
-        "severity": "medium",
-        "description": "Waiting line from the loop to the service desk lacks nearby rest seating.",
-        "affectsProfiles": ["limited_mobility", "elderly"],
-        "position3D": { "x": 1, "y": 0, "z": 1 },
-        "confidence": 0.8
+        "type": "crowding",
+        "severity": "low",
+        "description": "Game tables and social gathering points can reduce turning space when the room is busy.",
+        "affectsProfiles": ["wheelchair", "low_vision", "neurodivergent"],
+        "position3D": { "x": 0.4, "y": 0.2, "z": -0.4 },
+        "confidence": 0.73
       },
       {
-        "type": "audio_only_alert",
-        "severity": "high",
-        "description": "Queue callouts rely on audio announcements with weak visual duplication.",
-        "affectsProfiles": ["hearing_impaired"],
-        "position3D": { "x": -2, "y": 2, "z": 0 },
-        "confidence": 0.84
-      }
-    ]
-  },
-  {
-    "name": "Engineering Precinct Walkway",
-    "description": "Outdoor connector between engineering buildings and the main east-west pedestrian spine.",
-    "buildingType": "public",
-    "areaSqMeters": 690,
-    "polygon": {
-      "coordinates": [
-        { "latitude": -37.9146, "longitude": 145.1364 },
-        { "latitude": -37.9146, "longitude": 145.1384 },
-        { "latitude": -37.9136, "longitude": 145.1384 },
-        { "latitude": -37.9136, "longitude": 145.1364 }
-      ]
-    },
-    "center": { "latitude": -37.9141, "longitude": 145.1374 },
-    "fillColor": "rgba(236, 72, 153, 0.3)",
-    "hazards": [
-      {
-        "type": "steep_gradient",
-        "severity": "high",
-        "description": "A sloped connection toward the workshop edge exceeds comfortable gradient for many users.",
-        "affectsProfiles": ["wheelchair", "limited_mobility", "elderly", "parents_with_prams"],
-        "position3D": { "x": 0, "y": 0, "z": 3 },
-        "confidence": 0.9
-      },
-      {
-        "type": "trip_hazard",
+        "type": "noise",
         "severity": "medium",
-        "description": "Concrete slab joins create repeated height changes along the walkway edge.",
-        "affectsProfiles": ["low_vision", "elderly", "wheelchair"],
-        "position3D": { "x": 2, "y": 0, "z": -2 },
-        "confidence": 0.77
+        "description": "A lively recreation setting can create elevated background noise and sensory load.",
+        "affectsProfiles": ["neurodivergent", "hearing_impaired"],
+        "position3D": { "x": -0.5, "y": 0.3, "z": 0.1 },
+        "confidence": 0.76
       }
     ]
   }
